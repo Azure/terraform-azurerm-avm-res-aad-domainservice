@@ -4,6 +4,63 @@ variable "location" {
   nullable    = false
 }
 
+variable "subnet_resource_id" {
+  type        = string
+  description = <<DESCRIPTION
+The ID of the subnet to deploy the MEDS insatnce into.
+DESCRIPTION
+}
+
+variable "domain_name" {
+  type        = string
+  #TODO - validate domain name
+  description = <<DESCRIPTION
+The domain name to use for the Entra ID Domain Services instance.
+DESCRIPTION
+}
+
+#TODO - validate meaning of this setting
+variable "domain_configuration_type" {
+  type        = string
+  description = <<DESCRIPTION
+The domain configuration type to use for the Entra ID Domain Services instance. Possible values are `FullySynced` and `ResourceTrusting`.
+DESCRIPTION
+}
+
+variable "filtered_sync_enabled" {
+  type        = bool
+  description = <<DESCRIPTION
+Whether or not to enable filtered sync for the Entra ID Domain Services instance.
+DESCRIPTION
+  
+}
+
+variable "secure_ldap" {
+  type        = object({
+    enabled = optional(bool, false)
+    external_access_enabled = optional(bool, false)
+    pfx_certificate = string
+    pfx_certificate_password = string
+  })
+  sensitive = true
+  default = {}
+  description = <<DESCRIPTION
+A map describing the secure LDAP settings to use for the Entra ID Domain Services instance. This includes the following properties:
+- `enabled` - (Optional) Whether or not to enable secure LDAP. Defaults to `false`.
+- `external_access_enabled` - (Optional) Whether or not to enable external access for secure LDAP. Defaults to `false`.
+- `pfx_certificate` - (Required) The PFX certificate to use for secure LDAP.
+- `pfx_certificate_password` - (Required) The password for the PFX certificate.
+DESCRIPTION
+}
+
+variable "sku" {
+  type        = string
+  description = <<DESCRIPTION
+The SKU to use for the Entra ID Domain Services instance. Possible values are `Standard`, `Enterprise` and `Premium`.
+DESCRIPTION
+  
+}
+
 variable "name" {
   type        = string
   description = "The name of the this resource."

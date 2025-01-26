@@ -1,8 +1,61 @@
-# TODO: Replace this dummy resource azurerm_resource_group.TODO with your module resource
-resource "azurerm_resource_group" "TODO" {
-  location = var.location
-  name     = var.name # calling code must supply the name
-  tags     = var.tags
+
+resource "azurerm_resource_provider_registration" "this" {
+  name = "Microsoft.AAD"
+}
+
+resource "azuread_service_principal" "this" {
+  client_id = "2565bd9d-da50-47d4-8b85-4c97f669dc36" # published app for domain services
+  # todo: check if exists
+}
+
+#TODO: consider adding NSG with rules for domain services
+
+resource "azurerm_active_directory_domain_service" "this" {
+  name                = var.name
+  location            = var.location
+  resource_group_name = var.resource_group_name
+  domain_name           = var.domain_name
+  sku                   = var.sku
+  domain_configuration_type = var.domain_configuration_type
+  filtered_sync_enabled = var.filtered_sync_enabled
+  
+  dynamic "secure_ldap" {
+    for_each = var.secure_ldap.enabled == true ? [1] : []
+    content {
+      enabled = var.secure_ldap.enabled
+      pfx_certificate = var.secure_ldap.pfx_certificate
+      pfx_certificate_password = var.secure_ldap.pfx_certificate_password
+    }
+  }
+
+  dynamic "notifications" {
+    for_each = var.notifications != null ? var.notifications : null
+    content {
+      notify_dc_admins      = var.notifications.notify_dc_admins
+      notify_global_admins  = var.notifications.notify_global_admins
+    }
+    
+  }
+
+  initial_replica_set {
+    subnet_id = azurerm_subnet.aadds_subnet.id
+  }
+
+  notifications {
+    notify_dc_admins      = true
+    notify_global_admins  = true
+  }
+
+  security {
+    sync_kerberos_passwords = true
+    sync_ntlm_passwords     = true
+    sync_on_prem_passwords  = true
+  }
+  # This will change to "fully synced" once the service is fully deployed. and will enforce replacement 
+  
+  lifecycle {
+    ignore_changes = [ domain_configuration_type, tags ]
+  }
 }
 
 # required AVM resources interfaces
