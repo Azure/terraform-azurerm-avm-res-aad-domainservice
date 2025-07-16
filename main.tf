@@ -3,10 +3,6 @@ resource "azurerm_resource_provider_registration" "this" {
   name = "Microsoft.AAD"
 }
 
-resource "azuread_service_principal" "this" {
-  client_id = "2565bd9d-da50-47d4-8b85-4c97f669dc36" # published app for domain services
-  # todo: check if exists
-}
 
 #TODO: consider adding NSG with rules for domain services
 
@@ -29,16 +25,15 @@ resource "azurerm_active_directory_domain_service" "this" {
   }
 
   dynamic "notifications" {
-    for_each = var.notifications != null ? var.notifications : null
+    for_each = var.notifications != null ? var.notifications : {}
     content {
       notify_dc_admins      = var.notifications.notify_dc_admins
       notify_global_admins  = var.notifications.notify_global_admins
     }
-    
   }
 
   initial_replica_set {
-    subnet_id = azurerm_subnet.aadds_subnet.id
+    subnet_id = var.subnet_resource_id
   }
 
   notifications {
@@ -64,7 +59,7 @@ resource "azurerm_management_lock" "this" {
 
   lock_level = var.lock.kind
   name       = coalesce(var.lock.name, "lock-${var.lock.kind}")
-  scope      = azurerm_resource_group.TODO.id # TODO: Replace with your azurerm resource name
+  scope      = azurerm_active_directory_domain_service.this.id
   notes      = var.lock.kind == "CanNotDelete" ? "Cannot delete the resource or its child resources." : "Cannot delete or modify the resource or its child resources."
 }
 
@@ -72,7 +67,7 @@ resource "azurerm_role_assignment" "this" {
   for_each = var.role_assignments
 
   principal_id                           = each.value.principal_id
-  scope                                  = azurerm_resource_group.TODO.id # TODO: Replace this dummy resource azurerm_resource_group.TODO with your module resource
+  scope                                  = azurerm_active_directory_domain_service.this.id
   condition                              = each.value.condition
   condition_version                      = each.value.condition_version
   delegated_managed_identity_resource_id = each.value.delegated_managed_identity_resource_id
