@@ -50,3 +50,5 @@ avm.tflint_module.merged.hcl
 
 tests/
 examples/*/policy
+*.mptfbackup
+.avm
