@@ -52,6 +52,7 @@ resource "azurerm_active_directory_domain_service" "this" {
   sku                       = var.sku
   domain_configuration_type = var.domain_configuration_type
   filtered_sync_enabled     = var.filtered_sync_enabled
+  tags                      = var.tags
 
   initial_replica_set {
     subnet_id = var.subnet_resource_id
@@ -82,8 +83,6 @@ resource "azurerm_active_directory_domain_service" "this" {
     sync_ntlm_passwords     = true
     sync_on_prem_passwords  = true
   }
-
-  tags =var.tags
 
   lifecycle {
     ignore_changes = [domain_configuration_type, tags]
