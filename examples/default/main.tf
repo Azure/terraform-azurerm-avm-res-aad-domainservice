@@ -103,13 +103,7 @@ module "entra_domain_services" {
       winrm_rule_priority = 1100
     },
     r2 = {
-      nsg_resource_id     = azurerm_network_security_group.secondary.id
-      allow_rdp_access    = true
-      rdp_rule_priority   = 2000
-      winrm_rule_priority = 2100
-    },
-    r3 = {
-      nsg_resource_id     = azurerm_network_security_group.third.id
+      nsg_resource_id     = azurerm_network_security_group.secondary_nsg.id
       allow_rdp_access    = true
       rdp_rule_priority   = 2000
       winrm_rule_priority = 2100
