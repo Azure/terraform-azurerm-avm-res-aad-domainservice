@@ -14,5 +14,15 @@ terraform {
       source  = "hashicorp/random"
       version = "~> 3.5"
     }
+    azapi = {
+      source = "azure/azapi"
+    }
+    azuread = {
+      source  = "hashicorp/azuread"
+      version = "~> 2.0"
+    }
+    msgraph = {
+      source = "microsoft/msgraph"
+    }
   }
 }

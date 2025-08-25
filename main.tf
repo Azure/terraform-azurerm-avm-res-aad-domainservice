@@ -1,23 +1,25 @@
 
-resource "azurerm_resource_provider_registration" "this" {
-  name = "Microsoft.AAD"
-}
+# resource "azurerm_resource_provider_registration" "this" {
+#   name = "Microsoft.AAD"
+# }
 
 
 locals {
-  nsg_resource_group_name = split(var.nsg_rules.nsg_resource_id, "/")[4]
-  nsg_name                = split(var.nsg_rules.nsg_resource_id, "/")[8]
+  nsg_resource_type = "Microsoft.Network/networkSecurityGroups"
+  # nsg_resource_group_name = provider::azapi::parse_resource_id(local.nsg_resource_type, var.nsg_rules.nsg_resource_id)["resource_group_name"]
+  # nsg_name = provider::azapi::parse_resource_id(local.nsg_resource_type, var.nsg_rules.nsg_resource_id)["name"]
 }
 
 #TODO: consider adding NSG with rules for domain services
-
+# CrEATE OUR OWN nSG + ADD ALL OTHER APPLICABLE RULES
 
 resource "azurerm_network_security_rule" "rdp" {
-  count = var.nsg_rules.allow_rdp_access ? 1 : 0
+  for_each = { for k, v in var.nsg_rules : k => v if v.allow_rdp_access }
+
   name                        = "AllowRD"
-  network_security_group_name = local.nsg_name
-  resource_group_name         = local.nsg_resource_group_name
-  priority                    = var.nsg_rules.rdp_rule_priority
+  network_security_group_name = provider::azapi::parse_resource_id(local.nsg_resource_type, each.value.nsg_resource_id)["name"]
+  resource_group_name         = provider::azapi::parse_resource_id(local.nsg_resource_type, each.value.nsg_resource_id)["resource_group_name"]
+  priority                    = each.value.rdp_rule_priority
   direction                   = "Inbound"
   access                      = "Allow"
   protocol                    = "Tcp"
@@ -28,10 +30,12 @@ resource "azurerm_network_security_rule" "rdp" {
 }
 
 resource "azurerm_network_security_rule" "winrm" {
+  for_each = var.nsg_rules
+
   name                        = "AllowPSRemoting"
-  network_security_group_name = local.nsg_name
-  resource_group_name         = local.nsg_resource_group_name
-  priority                    = var.nsg_rules.winrm_rule_priority
+  network_security_group_name = provider::azapi::parse_resource_id(local.nsg_resource_type, each.value.nsg_resource_id)["name"]
+  resource_group_name         = provider::azapi::parse_resource_id(local.nsg_resource_type, each.value.nsg_resource_id)["resource_group_name"]
+  priority                    = each.value.winrm_rule_priority
   direction                   = "Inbound"
   access                      = "Allow"
   protocol                    = "Tcp"
@@ -39,23 +43,23 @@ resource "azurerm_network_security_rule" "winrm" {
   destination_port_ranges     = ["5986"]
   source_address_prefix       = "AzureActiveDirectoryDomainServices"
   destination_address_prefix  = "*"
-  
 }
 
+# Create the AAD Domain Service
 resource "azurerm_active_directory_domain_service" "this" {
-  name                = var.name
-  location            = var.location
-  resource_group_name = var.resource_group_name
-  domain_name           = var.domain_name
-  sku                   = var.sku
+  name                      = var.name
+  location                  = var.location
+  resource_group_name       = var.resource_group_name
+  domain_name               = var.domain_name
+  sku                       = var.sku
   domain_configuration_type = var.domain_configuration_type
-  filtered_sync_enabled = var.filtered_sync_enabled
-  
+  filtered_sync_enabled     = var.filtered_sync_enabled
+
   dynamic "secure_ldap" {
-    for_each = var.secure_ldap.enabled == true ? [1] : []
+    for_each = var.secure_ldap != null ? [1] : []
     content {
-      enabled = var.secure_ldap.enabled
-      pfx_certificate = var.secure_ldap.pfx_certificate
+      enabled                  = var.secure_ldap.enabled
+      pfx_certificate          = var.secure_ldap.pfx_certificate
       pfx_certificate_password = var.secure_ldap.pfx_certificate_password
     }
   }
@@ -63,8 +67,8 @@ resource "azurerm_active_directory_domain_service" "this" {
   dynamic "notifications" {
     for_each = var.notifications != null ? var.notifications : {}
     content {
-      notify_dc_admins      = var.notifications.notify_dc_admins
-      notify_global_admins  = var.notifications.notify_global_admins
+      notify_dc_admins     = var.notifications.notify_dc_admins
+      notify_global_admins = var.notifications.notify_global_admins
     }
   }
 
@@ -73,8 +77,8 @@ resource "azurerm_active_directory_domain_service" "this" {
   }
 
   notifications {
-    notify_dc_admins      = true
-    notify_global_admins  = true
+    notify_dc_admins     = true
+    notify_global_admins = true
   }
 
   security {
@@ -83,10 +87,34 @@ resource "azurerm_active_directory_domain_service" "this" {
     sync_on_prem_passwords  = true
   }
   # This will change to "fully synced" once the service is fully deployed. and will enforce replacement 
-  
+
   lifecycle {
-    ignore_changes = [ domain_configuration_type, tags ]
+    ignore_changes = [domain_configuration_type, tags]
   }
+}
+
+# Create a replica set for the AAD Domain Service
+resource "azurerm_active_directory_domain_service_replica_set" "replica" {
+  for_each = var.replica_sets
+
+  domain_service_id = azurerm_active_directory_domain_service.this.id
+  location          = each.value.replica_location
+  subnet_id         = each.value.subnet_id
+
+  depends_on = [
+    azurerm_active_directory_domain_service.this
+  ]
+}
+
+# Create a trust for the AAD Domain Service
+resource "azurerm_active_directory_domain_service_trust" "this" {
+  for_each = var.domain_service_trust
+
+  domain_service_id      = resource.azurerm_active_directory_domain_service.this.id
+  name                   = each.value.name
+  password               = each.value.password
+  trusted_domain_dns_ips = each.value.trusted_domain_dns_ips
+  trusted_domain_fqdn    = each.value.trusted_domain_fqdn
 }
 
 # required AVM resources interfaces
