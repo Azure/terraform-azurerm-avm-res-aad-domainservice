@@ -109,6 +109,12 @@ module "entra_domain_services" {
       winrm_rule_priority = 2100
     }
   }
+  replica_sets = {
+    secondary = {
+      subnet_resource_id = azurerm_subnet.secondary_subnet.id
+      location           = local.secondary_replica_location
+    }
+  }
 }
 
 
