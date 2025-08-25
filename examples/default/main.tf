@@ -2,22 +2,22 @@ terraform {
   required_version = ">= 1.9, < 2.0"
 
   required_providers {
-    azapi = {
-      source  = "azure/azapi"
-      version = "~> 2.4"
-    }
+    # azapi = {
+    #   source  = "azure/azapi"
+    #   version = "~> 2.4"
+    # }
     azurerm = {
       source  = "hashicorp/azurerm"
       version = "~> 4.0"
     }
-    modtm = {
-      source  = "azure/modtm"
-      version = "~> 0.3"
-    }
-    random = {
-      source  = "hashicorp/random"
-      version = ">= 3.5.0, < 4.0"
-    }
+    # modtm = {
+    #   source  = "azure/modtm"
+    #   version = "~> 0.3"
+    # }
+    # random = {
+    #   source  = "hashicorp/random"
+    #   version = ">= 3.5.0, < 4.0"
+    # }
   }
 }
 
@@ -92,7 +92,7 @@ resource "azurerm_bastion_host" "example" {
 }
 
 
-module "MEDS" {
+module "entra_domain_services" {
   source = "../../"
 
   domain_configuration_type = "FullySynced"
@@ -131,83 +131,40 @@ module "MEDS" {
 locals {
   secondary_replica_location = "uksouth"
 }
-resource "azurerm_virtual_network" "secondary" {
+resource "azurerm_virtual_network" "secondary_vnet" {
   location            = local.secondary_replica_location
-  name                = "secondary-example-network"
+  name                = "secondary_example_network"
   resource_group_name = azurerm_resource_group.example.name
   address_space       = ["192.168.0.0/16"]
 }
-resource "azurerm_subnet" "secondary" {
+resource "azurerm_subnet" "secondary_subnet" {
   address_prefixes     = ["192.168.0.0/24"]
-  name                 = "aadds-subnet-secondary"
+  name                 = "aadds_subnet_secondary"
   resource_group_name  = azurerm_resource_group.example.name
-  virtual_network_name = azurerm_virtual_network.secondary.name
+  virtual_network_name = azurerm_virtual_network.secondary_vnet.name
 }
-resource "azurerm_virtual_network_peering" "example-1" {
-  name                      = "peer1to2"
-  remote_virtual_network_id = azurerm_virtual_network.secondary.id
+resource "azurerm_virtual_network_peering" "peering_main_to_secondary" {
+  name                      = "peering_main_to_secondary"
+  remote_virtual_network_id = azurerm_virtual_network.secondary_vnet.id
   resource_group_name       = azurerm_resource_group.example.name
   virtual_network_name      = azurerm_virtual_network.example.name
 }
-resource "azurerm_virtual_network_peering" "example-2" {
-  name                      = "peer2to1"
+resource "azurerm_virtual_network_peering" "peering_secondary_to_main" {
+  name                      = "peering_secondary_to_main"
   remote_virtual_network_id = azurerm_virtual_network.example.id
   resource_group_name       = azurerm_resource_group.example.name
-  virtual_network_name      = azurerm_virtual_network.secondary.name
+  virtual_network_name      = azurerm_virtual_network.secondary_vnet.name
 }
 
-resource "azurerm_network_security_group" "secondary" {
+resource "azurerm_network_security_group" "secondary_nsg" {
   location            = local.secondary_replica_location
-  name                = "secondary-MEDS-nsg"
+  name                = "secondary_MEDS_nsg"
   resource_group_name = azurerm_resource_group.example.name
   tags = {
     environment = "Production"
   }
 }
-resource "azurerm_subnet_network_security_group_association" "secondary" {
-  network_security_group_id = azurerm_network_security_group.secondary.id
-  subnet_id                 = azurerm_subnet.secondary.id
-}
-
-########### Third Replica ###########
-
-locals {
-  third_replica_location = "italynorth"
-}
-resource "azurerm_virtual_network" "third" {
-  location            = local.third_replica_location
-  name                = "third-example-network"
-  resource_group_name = azurerm_resource_group.example.name
-  address_space       = ["172.16.0.0/16"]
-}
-resource "azurerm_subnet" "third" {
-  address_prefixes     = ["172.16.0.0/24"]
-  name                 = "aadds-subnet-third"
-  resource_group_name  = azurerm_resource_group.example.name
-  virtual_network_name = azurerm_virtual_network.third.name
-}
-resource "azurerm_virtual_network_peering" "example-3" {
-  name                      = "peer1to3"
-  remote_virtual_network_id = azurerm_virtual_network.third.id
-  resource_group_name       = azurerm_resource_group.example.name
-  virtual_network_name      = azurerm_virtual_network.example.name
-}
-resource "azurerm_virtual_network_peering" "example-4" {
-  name                      = "peer3to1"
-  remote_virtual_network_id = azurerm_virtual_network.example.id
-  resource_group_name       = azurerm_resource_group.example.name
-  virtual_network_name      = azurerm_virtual_network.third.name
-}
-
-resource "azurerm_network_security_group" "third" {
-  location            = local.third_replica_location
-  name                = "third-MEDS-nsg"
-  resource_group_name = azurerm_resource_group.example.name
-  tags = {
-    environment = "Production"
-  }
-}
-resource "azurerm_subnet_network_security_group_association" "third" {
-  network_security_group_id = azurerm_network_security_group.third.id
-  subnet_id                 = azurerm_subnet.third.id
+resource "azurerm_subnet_network_security_group_association" "secondary_nsg_association" {
+  network_security_group_id = azurerm_network_security_group.secondary_nsg.id
+  subnet_id                 = azurerm_subnet.secondary_subnet.id
 }
