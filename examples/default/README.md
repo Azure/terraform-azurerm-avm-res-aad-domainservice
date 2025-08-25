@@ -260,11 +260,6 @@ The following resources are used by this module:
 - [azurerm_virtual_network_peering.example-2](https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/resources/virtual_network_peering) (resource)
 - [azurerm_virtual_network_peering.example-3](https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/resources/virtual_network_peering) (resource)
 - [azurerm_virtual_network_peering.example-4](https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/resources/virtual_network_peering) (resource)
-- [msgraph_resource.aad_filters](https://registry.terraform.io/providers/hashicorp/msgraph/latest/docs/resources/resource) (resource)
-- [msgraph_resource.aad_sync_app](https://registry.terraform.io/providers/hashicorp/msgraph/latest/docs/resources/resource) (resource)
-- [msgraph_resource.application_extensionProperties](https://registry.terraform.io/providers/hashicorp/msgraph/latest/docs/resources/resource) (resource)
-- [msgraph_resource.graph_app_addins](https://registry.terraform.io/providers/hashicorp/msgraph/latest/docs/resources/resource) (resource)
-- [msgraph_resource.graph_app_managed](https://registry.terraform.io/providers/hashicorp/msgraph/latest/docs/resources/resource) (resource)
 
 <!-- markdownlint-disable MD013 -->
 ## Required Inputs
