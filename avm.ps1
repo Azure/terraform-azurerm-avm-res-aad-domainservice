@@ -19,7 +19,7 @@ $CONTAINER_IMAGE = if ($env:CONTAINER_IMAGE) { $env:CONTAINER_IMAGE } else { "mc
 $CONTAINER_PULL_POLICY = if ($env:CONTAINER_PULL_POLICY) { $env:CONTAINER_PULL_POLICY } else { "always" }
 $MAKEFILE_REF = if ($env:MAKEFILE_REF) { $env:MAKEFILE_REF } else { "main" }
 $PORCH_REF = if ($env:PORCH_REF) { $env:PORCH_REF } else { "main" }
-$IsWindows = $true
+
 # Check if container runtime is available
 if (-not (Get-Command $CONTAINER_RUNTIME -ErrorAction SilentlyContinue) -and -not $env:AVM_IN_CONTAINER) {
   Write-Error "Error: $CONTAINER_RUNTIME is not installed. Please install $CONTAINER_RUNTIME first."
