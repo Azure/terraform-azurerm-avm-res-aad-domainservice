@@ -111,8 +111,8 @@ module "entra_domain_services" {
   }
   replica_sets = {
     secondary = {
-      subnet_resource_id = azurerm_subnet.secondary_subnet.id
-      location           = local.secondary_replica_location
+      subnet_id        = azurerm_subnet.secondary_subnet.id
+      replica_location = local.secondary_replica_location
     }
   }
 }
