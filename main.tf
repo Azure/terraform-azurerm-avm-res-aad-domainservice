@@ -6,8 +6,6 @@
 
 locals {
   nsg_resource_type = "Microsoft.Network/networkSecurityGroups"
-  # nsg_resource_group_name = provider::azapi::parse_resource_id(local.nsg_resource_type, var.nsg_rules.nsg_resource_id)["resource_group_name"]
-  # nsg_name = provider::azapi::parse_resource_id(local.nsg_resource_type, var.nsg_rules.nsg_resource_id)["name"]
 }
 
 #TODO: consider adding NSG with rules for domain services
@@ -16,77 +14,74 @@ locals {
 resource "azurerm_network_security_rule" "rdp" {
   for_each = { for k, v in var.nsg_rules : k => v if v.allow_rdp_access }
 
+  access                      = "Allow"
+  direction                   = "Inbound"
   name                        = "AllowRD"
   network_security_group_name = provider::azapi::parse_resource_id(local.nsg_resource_type, each.value.nsg_resource_id)["name"]
-  resource_group_name         = provider::azapi::parse_resource_id(local.nsg_resource_type, each.value.nsg_resource_id)["resource_group_name"]
   priority                    = each.value.rdp_rule_priority
-  direction                   = "Inbound"
-  access                      = "Allow"
   protocol                    = "Tcp"
-  source_port_range           = "*"
+  resource_group_name         = provider::azapi::parse_resource_id(local.nsg_resource_type, each.value.nsg_resource_id)["resource_group_name"]
+  destination_address_prefix  = "*"
   destination_port_ranges     = ["3389"]
   source_address_prefix       = "CorpNetSaw"
-  destination_address_prefix  = "*"
+  source_port_range           = "*"
 }
 
 resource "azurerm_network_security_rule" "winrm" {
   for_each = var.nsg_rules
 
+  access                      = "Allow"
+  direction                   = "Inbound"
   name                        = "AllowPSRemoting"
   network_security_group_name = provider::azapi::parse_resource_id(local.nsg_resource_type, each.value.nsg_resource_id)["name"]
-  resource_group_name         = provider::azapi::parse_resource_id(local.nsg_resource_type, each.value.nsg_resource_id)["resource_group_name"]
   priority                    = each.value.winrm_rule_priority
-  direction                   = "Inbound"
-  access                      = "Allow"
   protocol                    = "Tcp"
-  source_port_range           = "*"
+  resource_group_name         = provider::azapi::parse_resource_id(local.nsg_resource_type, each.value.nsg_resource_id)["resource_group_name"]
+  destination_address_prefix  = "*"
   destination_port_ranges     = ["5986"]
   source_address_prefix       = "AzureActiveDirectoryDomainServices"
-  destination_address_prefix  = "*"
+  source_port_range           = "*"
 }
 
 # Create the AAD Domain Service
 resource "azurerm_active_directory_domain_service" "this" {
-  name                      = var.name
-  location                  = var.location
-  resource_group_name       = var.resource_group_name
   domain_name               = var.domain_name
+  location                  = var.location
+  name                      = var.name
+  resource_group_name       = var.resource_group_name
   sku                       = var.sku
   domain_configuration_type = var.domain_configuration_type
   filtered_sync_enabled     = var.filtered_sync_enabled
 
+  initial_replica_set {
+    subnet_id = var.subnet_resource_id
+  }
+  dynamic "notifications" {
+    for_each = var.notifications != null ? var.notifications : {}
+
+    content {
+      notify_dc_admins     = var.notifications.notify_dc_admins
+      notify_global_admins = var.notifications.notify_global_admins
+    }
+  }
+  notifications {
+    notify_dc_admins     = true
+    notify_global_admins = true
+  }
   dynamic "secure_ldap" {
     for_each = var.secure_ldap != null ? [1] : []
+
     content {
       enabled                  = var.secure_ldap.enabled
       pfx_certificate          = var.secure_ldap.pfx_certificate
       pfx_certificate_password = var.secure_ldap.pfx_certificate_password
     }
   }
-
-  dynamic "notifications" {
-    for_each = var.notifications != null ? var.notifications : {}
-    content {
-      notify_dc_admins     = var.notifications.notify_dc_admins
-      notify_global_admins = var.notifications.notify_global_admins
-    }
-  }
-
-  initial_replica_set {
-    subnet_id = var.subnet_resource_id
-  }
-
-  notifications {
-    notify_dc_admins     = true
-    notify_global_admins = true
-  }
-
   security {
     sync_kerberos_passwords = true
     sync_ntlm_passwords     = true
     sync_on_prem_passwords  = true
   }
-  # This will change to "fully synced" once the service is fully deployed. and will enforce replacement 
 
   lifecycle {
     ignore_changes = [domain_configuration_type, tags]

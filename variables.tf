@@ -1,13 +1,8 @@
-variable "location" {
-  type        = string
-  description = "Azure region where the resource should be deployed."
-  nullable    = false
-}
-
-variable "subnet_resource_id" {
+#TODO - validate meaning of this setting
+variable "domain_configuration_type" {
   type        = string
   description = <<DESCRIPTION
-The ID of the subnet to deploy the MEDS insatnce into.
+The domain configuration type to use for the Entra ID Domain Services instance. Possible values are `FullySynced` and `ResourceTrusting`.
 DESCRIPTION
 }
 
@@ -19,46 +14,17 @@ The domain name to use for the Entra ID Domain Services instance.
 DESCRIPTION
 }
 
-#TODO - validate meaning of this setting
-variable "domain_configuration_type" {
-  type        = string
-  description = <<DESCRIPTION
-The domain configuration type to use for the Entra ID Domain Services instance. Possible values are `FullySynced` and `ResourceTrusting`.
-DESCRIPTION
-}
-
 variable "filtered_sync_enabled" {
   type        = bool
   description = <<DESCRIPTION
 Whether or not to enable filtered sync for the Entra ID Domain Services instance.
 DESCRIPTION
-
 }
 
-variable "secure_ldap" {
-  type = object({
-    enabled                  = optional(bool, false)
-    external_access_enabled  = optional(bool, false)
-    pfx_certificate          = string
-    pfx_certificate_password = string
-  })
-  sensitive   = true
-  default     = null
-  description = <<DESCRIPTION
-A map describing the secure LDAP settings to use for the Entra ID Domain Services instance. This includes the following properties:
-- `enabled` - (Optional) Whether or not to enable secure LDAP. Defaults to `false`.
-- `external_access_enabled` - (Optional) Whether or not to enable external access for secure LDAP. Defaults to `false`.
-- `pfx_certificate` - (Required) The PFX certificate to use for secure LDAP.
-- `pfx_certificate_password` - (Required) The password for the PFX certificate.
-DESCRIPTION
-}
-
-variable "sku" {
+variable "location" {
   type        = string
-  description = <<DESCRIPTION
-The SKU to use for the Entra ID Domain Services instance. Possible values are `Standard`, `Enterprise` and `Premium`.
-DESCRIPTION
-
+  description = "Azure region where the resource should be deployed."
+  nullable    = false
 }
 
 variable "name" {
@@ -70,6 +36,20 @@ variable "name" {
 variable "resource_group_name" {
   type        = string
   description = "The resource group where the resources will be deployed."
+}
+
+variable "sku" {
+  type        = string
+  description = <<DESCRIPTION
+The SKU to use for the Entra ID Domain Services instance. Possible values are `Standard`, `Enterprise` and `Premium`.
+DESCRIPTION
+}
+
+variable "subnet_resource_id" {
+  type        = string
+  description = <<DESCRIPTION
+The ID of the subnet to deploy the MEDS insatnce into.
+DESCRIPTION
 }
 
 # required AVM interfaces
@@ -140,6 +120,19 @@ DESCRIPTION
   }
 }
 
+variable "domain_service_trust" {
+  type = map(object({
+    name                   = string
+    password               = string
+    trusted_domain_dns_ips = string
+    trusted_domain_fqdn    = string
+  }))
+  default     = {}
+  description = <<DESCRIPTION
+an object containing the priorities for the NSG rules to be created. The following properties can be specified: `rdp_rule_priority` and `winrm_rule_priority`.
+DESCRIPTION
+}
+
 variable "enable_telemetry" {
   type        = bool
   default     = true
@@ -186,6 +179,57 @@ DESCRIPTION
   nullable    = false
 }
 
+variable "notifications" {
+  type = object({
+    notify_dc_admins     = optional(bool, true)
+    notify_global_admins = optional(bool, true)
+  })
+  default     = null
+  description = <<DESCRIPTION
+A map describing the notifications settings to use for the Entra ID Domain Services instance. This includes the following properties:
+- `notify_dc_admins` - (Optional) Whether or not to notify domain controllers administrators. Defaults to `true`.
+- `notify_global_admins` - (Optional) Whether or not to notify global administrators. Defaults to `true`.
+DESCRIPTION
+}
+
+variable "nsg_rules" {
+  type = map(object({
+    nsg_resource_id     = optional(string)
+    allow_rdp_access    = optional(bool, false)
+    rdp_rule_priority   = optional(number)
+    winrm_rule_priority = optional(number)
+  }))
+  default     = {}
+  description = <<DESCRIPTION
+an object containing the priorities for the NSG rules to be created. The following properties can be specified: `rdp_rule_priority` and `winrm_rule_priority`.
+DESCRIPTION
+}
+
+variable "ou_containers" {
+  type = map(object({
+    name         = string
+    password     = string
+    account_name = string
+    spn          = string
+    parent_id    = string
+  }))
+  default     = {}
+  description = <<DESCRIPTION
+  A map of OU containers to create in the Azure AD Domain Services instance. 
+DESCRIPTION
+}
+
+variable "replica_sets" {
+  type = map(object({
+    replica_location = string
+    subnet_id        = string
+  }))
+  default     = {}
+  description = <<DESCRIPTION
+A map of replica sets to create for the Entra ID Domain Services instance. The map key is deliberately arbitrary to avoid issues where map keys maybe unknown at plan time.   
+DESCRIPTION
+}
+
 variable "role_assignments" {
   type = map(object({
     role_definition_id_or_name             = string
@@ -212,74 +256,27 @@ DESCRIPTION
   nullable    = false
 }
 
+variable "secure_ldap" {
+  type = object({
+    enabled                  = optional(bool, false)
+    external_access_enabled  = optional(bool, false)
+    pfx_certificate          = string
+    pfx_certificate_password = string
+  })
+  default     = null
+  description = <<DESCRIPTION
+A map describing the secure LDAP settings to use for the Entra ID Domain Services instance. This includes the following properties:
+- `enabled` - (Optional) Whether or not to enable secure LDAP. Defaults to `false`.
+- `external_access_enabled` - (Optional) Whether or not to enable external access for secure LDAP. Defaults to `false`.
+- `pfx_certificate` - (Required) The PFX certificate to use for secure LDAP.
+- `pfx_certificate_password` - (Required) The password for the PFX certificate.
+DESCRIPTION
+  sensitive   = true
+}
+
 # tflint-ignore: terraform_unused_declarations
 variable "tags" {
   type        = map(string)
   default     = null
   description = "(Optional) Tags of the resource."
-}
-
-
-variable "notifications" {
-  type = object({
-    notify_dc_admins     = optional(bool, true)
-    notify_global_admins = optional(bool, true)
-  })
-  default     = null
-  description = <<DESCRIPTION
-A map describing the notifications settings to use for the Entra ID Domain Services instance. This includes the following properties:
-- `notify_dc_admins` - (Optional) Whether or not to notify domain controllers administrators. Defaults to `true`.
-- `notify_global_admins` - (Optional) Whether or not to notify global administrators. Defaults to `true`.
-DESCRIPTION
-}
-
-variable "replica_sets" {
-  type = map(object({
-    replica_location = string
-    subnet_id        = string
-  }))
-  default     = {}
-  description = <<DESCRIPTION
-A map of replica sets to create for the Entra ID Domain Services instance. The map key is deliberately arbitrary to avoid issues where map keys maybe unknown at plan time.   
-DESCRIPTION
-}
-
-variable "nsg_rules" {
-  type = map(object({
-    nsg_resource_id     = optional(string)
-    allow_rdp_access    = optional(bool, false)
-    rdp_rule_priority   = optional(number)
-    winrm_rule_priority = optional(number)
-  }))
-  default     = {}
-  description = <<DESCRIPTION
-an object containing the priorities for the NSG rules to be created. The following properties can be specified: `rdp_rule_priority` and `winrm_rule_priority`.
-DESCRIPTION
-}
-
-variable "domain_service_trust" {
-  type = map(object({
-    name                   = string
-    password               = string
-    trusted_domain_dns_ips = string
-    trusted_domain_fqdn    = string
-  }))
-  default     = {}
-  description = <<DESCRIPTION
-an object containing the priorities for the NSG rules to be created. The following properties can be specified: `rdp_rule_priority` and `winrm_rule_priority`.
-DESCRIPTION
-}
-
-variable "ou_containers" {
-  type = map(object({
-    name         = string
-    password     = string
-    account_name = string
-    spn          = string
-    parent_id    = string
-  }))
-  default     = {}
-  description = <<DESCRIPTION
-  A map of OU containers to create in the Azure AD Domain Services instance. 
-DESCRIPTION
 }
