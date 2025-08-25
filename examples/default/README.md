@@ -94,7 +94,6 @@ resource "azurerm_bastion_host" "example" {
 module "entra_domain_services" {
   source = "../../"
 
-<<<<<<< HEAD
   domain_configuration_type = "FullySynced"
   domain_name               = "contoso.com"
   filtered_sync_enabled     = true
@@ -167,14 +166,6 @@ resource "azurerm_network_security_group" "secondary_nsg" {
 resource "azurerm_subnet_network_security_group_association" "secondary_nsg_association" {
   network_security_group_id = azurerm_network_security_group.secondary_nsg.id
   subnet_id                 = azurerm_subnet.secondary_subnet.id
-=======
-  # source             = "Azure/avm-<res/ptn>-<name>/azurerm"
-  # ...
-  location            = azurerm_resource_group.this.location
-  name                = "TODO" # TODO update with module.naming.<RESOURCE_TYPE>.name_unique
-  resource_group_name = azurerm_resource_group.this.name
-  enable_telemetry    = var.enable_telemetry # see variables.tf
->>>>>>> f3aa35e8d6e1cf118a18015fbd8cacd98274f13b
 }
 ```
 
