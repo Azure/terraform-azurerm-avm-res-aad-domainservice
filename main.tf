@@ -1,15 +1,5 @@
-
-# resource "azurerm_resource_provider_registration" "this" {
-#   name = "Microsoft.AAD"
-# }
-
-
-locals {
-  nsg_resource_type = "Microsoft.Network/networkSecurityGroups"
-}
-
 #TODO: consider adding NSG with rules for domain services
-# CrEATE OUR OWN nSG + ADD ALL OTHER APPLICABLE RULES
+# Create our own managed NSG + add applicable rules
 
 resource "azurerm_network_security_rule" "rdp" {
   for_each = { for k, v in var.nsg_rules : k => v if v.allow_rdp_access }
