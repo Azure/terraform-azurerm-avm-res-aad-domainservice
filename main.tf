@@ -1,5 +1,12 @@
+
+
 #TODO: consider adding NSG with rules for domain services
 # Create our own managed NSG + add applicable rules
+
+# Ensure the Microsoft.AAD resource provider is registered
+resource "azurerm_resource_provider_registration" "aad" {
+  name = "Microsoft.AAD"
+}
 
 # Create the AAD Domain Service
 resource "azurerm_active_directory_domain_service" "this" {
@@ -41,6 +48,8 @@ resource "azurerm_active_directory_domain_service" "this" {
     sync_ntlm_passwords     = true
     sync_on_prem_passwords  = true
   }
+
+  depends_on = [azurerm_resource_provider_registration.aad]
 
   lifecycle {
     ignore_changes = [domain_configuration_type, tags]
