@@ -4,9 +4,9 @@
 # Create our own managed NSG + add applicable rules
 
 # Ensure the Microsoft.AAD resource provider is registered
-resource "azurerm_resource_provider_registration" "aad" {
-  name = "Microsoft.AAD"
-}
+# resource "azurerm_resource_provider_registration" "aad" {
+#   name = "Microsoft.AAD"
+# }
 
 # Create the AAD Domain Service
 resource "azurerm_active_directory_domain_service" "this" {
