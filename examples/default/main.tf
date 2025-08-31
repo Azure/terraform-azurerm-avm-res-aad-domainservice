@@ -58,25 +58,6 @@ resource "azurerm_subnet" "ad_subnet" {
   resource_group_name  = azurerm_resource_group.example.name
   virtual_network_name = azurerm_virtual_network.example.name
 }
-resource "azurerm_public_ip" "bastion_pip" {
-  allocation_method   = "Static"
-  location            = azurerm_resource_group.example.location
-  name                = "bastion_pip"
-  resource_group_name = azurerm_resource_group.example.name
-  sku                 = "Standard"
-}
-resource "azurerm_bastion_host" "example" {
-  location            = azurerm_resource_group.example.location
-  name                = "examplebastion"
-  resource_group_name = azurerm_resource_group.example.name
-
-  ip_configuration {
-    name                 = "configuration"
-    public_ip_address_id = azurerm_public_ip.bastion_pip.id
-    subnet_id            = azurerm_subnet.bastion_subnet.id
-  }
-}
-
 
 module "entra_domain_services" {
   source = "../../"
