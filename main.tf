@@ -49,8 +49,6 @@ resource "azurerm_active_directory_domain_service" "this" {
     sync_on_prem_passwords  = true
   }
 
-  depends_on = [azurerm_resource_provider_registration.aad]
-
   lifecycle {
     ignore_changes = [domain_configuration_type, tags]
   }
