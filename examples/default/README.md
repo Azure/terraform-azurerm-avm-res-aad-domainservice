@@ -20,14 +20,18 @@ provider "azurerm" {
   features {}
 }
 
+locals {
+  main_replica_location = "germanywestcentral"
+}
+
 resource "azurerm_resource_group" "example" {
-  location = "germanywestcentral"
+  location = local.main_replica_location
   name     = "RG-MEDS"
 }
 
 resource "azurerm_virtual_network" "example" {
   location            = azurerm_resource_group.example.location
-  name                = "example-network"
+  name                = "MEDS-network"
   resource_group_name = azurerm_resource_group.example.name
   address_space       = ["10.0.0.0/16"]
 }
@@ -36,14 +40,11 @@ resource "azurerm_network_security_group" "example" {
   location            = azurerm_resource_group.example.location
   name                = "MEDS-nsg"
   resource_group_name = azurerm_resource_group.example.name
-  tags = {
-    environment = "Production"
-  }
 }
 
 resource "azurerm_subnet" "example" {
   address_prefixes     = ["10.0.0.0/24"]
-  name                 = "aadds-subnet"
+  name                 = "MEDS-subnet"
   resource_group_name  = azurerm_resource_group.example.name
   virtual_network_name = azurerm_virtual_network.example.name
 }
@@ -53,67 +54,80 @@ resource "azurerm_subnet_network_security_group_association" "example" {
   subnet_id                 = azurerm_subnet.example.id
 }
 
-resource "azurerm_subnet" "bastion_subnet" {
-  address_prefixes     = ["10.0.1.0/24"]
-  name                 = "AzureBastionSubnet"
-  resource_group_name  = azurerm_resource_group.example.name
-  virtual_network_name = azurerm_virtual_network.example.name
-}
-resource "azurerm_subnet" "ad_subnet" {
-  address_prefixes     = ["10.0.2.0/24"]
-  name                 = "ad_subnet"
-  resource_group_name  = azurerm_resource_group.example.name
-  virtual_network_name = azurerm_virtual_network.example.name
-}
-
 module "entra_domain_services" {
   source = "../../"
 
   domain_configuration_type = "FullySynced"
   domain_name               = "contoso.com"
-  filtered_sync_enabled     = true
-  location                  = "germanywestcentral"
+  filtered_sync_enabled     = false
+  location                  = azurerm_resource_group.example.location
   name                      = "MEDS"
-  resource_group_name       = "RG-MEDS"
+  resource_group_name       = azurerm_resource_group.example.name
   sku                       = "Enterprise"
   subnet_resource_id        = azurerm_subnet.example.id
+
+  # Deploy required NSG rules
   nsg_rules = {
     r1 = {
-      nsg_resource_id     = azurerm_network_security_group.example.id
-      allow_rdp_access    = true
-      rdp_rule_priority   = 1000
-      winrm_rule_priority = 1100
+      nsg_resource_id   = azurerm_network_security_group.example.id
+      allow_rd_access  = true
+      rd_rule_priority = 2000
+      rd_rule_name     = "CUSTOMRULENAME"
+
+      allow_PSRemoting_access  = true
+      PSRemoting_rule_priority = 2100
+
+      allow_ldaps_public_access = false
+      #ldaps_public_rule_priority = optional(number)
+
+      allow_ldaps_private_access = false
+      #ldaps_private_rule_priority = optional(number)
     },
     r2 = {
-      nsg_resource_id     = azurerm_network_security_group.secondary_nsg.id
-      allow_rdp_access    = true
-      rdp_rule_priority   = 2000
-      winrm_rule_priority = 2100
+      nsg_resource_id   = azurerm_network_security_group.secondary_nsg.id
+      allow_rd_access  = true
+      rd_rule_priority = 2000
+
+      allow_PSRemoting_access  = true
+      PSRemoting_rule_priority = 2100
+
+      allow_ldaps_public_access = false
+      #ldaps_public_rule_priority = optional(number)
+
+      allow_ldaps_private_access = false
+      #ldaps_private_rule_priority = optional(number)
     }
   }
+
+  # Deploy the secondary replica
   replica_sets = {
     secondary = {
       subnet_id        = azurerm_subnet.secondary_subnet.id
       replica_location = local.secondary_replica_location
     }
   }
+
+  tags = {
+    cost_center = "IT"
+  }
 }
 
 
-########### Secondary Replica ###########
+########### Secondary Replica Networking Resources ###########
 
 locals {
   secondary_replica_location = "uksouth"
 }
+
 resource "azurerm_virtual_network" "secondary_vnet" {
   location            = local.secondary_replica_location
-  name                = "secondary_example_network"
+  name                = "secondary_MEDS_network"
   resource_group_name = azurerm_resource_group.example.name
   address_space       = ["192.168.0.0/16"]
 }
 resource "azurerm_subnet" "secondary_subnet" {
   address_prefixes     = ["192.168.0.0/24"]
-  name                 = "aadds_subnet_secondary"
+  name                 = "MEDS_subnet_secondary"
   resource_group_name  = azurerm_resource_group.example.name
   virtual_network_name = azurerm_virtual_network.secondary_vnet.name
 }
@@ -160,8 +174,6 @@ The following resources are used by this module:
 - [azurerm_network_security_group.example](https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/resources/network_security_group) (resource)
 - [azurerm_network_security_group.secondary_nsg](https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/resources/network_security_group) (resource)
 - [azurerm_resource_group.example](https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/resources/resource_group) (resource)
-- [azurerm_subnet.ad_subnet](https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/resources/subnet) (resource)
-- [azurerm_subnet.bastion_subnet](https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/resources/subnet) (resource)
 - [azurerm_subnet.example](https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/resources/subnet) (resource)
 - [azurerm_subnet.secondary_subnet](https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/resources/subnet) (resource)
 - [azurerm_subnet_network_security_group_association.example](https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/resources/subnet_network_security_group_association) (resource)

@@ -1,38 +1,6 @@
 #TODO: consider adding NSG with rules for domain services
 # Create our own managed NSG + add applicable rules
 
-resource "azurerm_network_security_rule" "rdp" {
-  for_each = { for k, v in var.nsg_rules : k => v if v.allow_rdp_access }
-
-  access                      = "Allow"
-  direction                   = "Inbound"
-  name                        = "AllowRD"
-  network_security_group_name = provider::azapi::parse_resource_id(local.nsg_resource_type, each.value.nsg_resource_id)["name"]
-  priority                    = each.value.rdp_rule_priority
-  protocol                    = "Tcp"
-  resource_group_name         = provider::azapi::parse_resource_id(local.nsg_resource_type, each.value.nsg_resource_id)["resource_group_name"]
-  destination_address_prefix  = "*"
-  destination_port_ranges     = ["3389"]
-  source_address_prefix       = "CorpNetSaw"
-  source_port_range           = "*"
-}
-
-resource "azurerm_network_security_rule" "winrm" {
-  for_each = var.nsg_rules
-
-  access                      = "Allow"
-  direction                   = "Inbound"
-  name                        = "AllowPSRemoting"
-  network_security_group_name = provider::azapi::parse_resource_id(local.nsg_resource_type, each.value.nsg_resource_id)["name"]
-  priority                    = each.value.winrm_rule_priority
-  protocol                    = "Tcp"
-  resource_group_name         = provider::azapi::parse_resource_id(local.nsg_resource_type, each.value.nsg_resource_id)["resource_group_name"]
-  destination_address_prefix  = "*"
-  destination_port_ranges     = ["5986"]
-  source_address_prefix       = "AzureActiveDirectoryDomainServices"
-  source_port_range           = "*"
-}
-
 # Create the AAD Domain Service
 resource "azurerm_active_directory_domain_service" "this" {
   domain_name               = var.domain_name
@@ -125,4 +93,88 @@ resource "azurerm_role_assignment" "this" {
   role_definition_id                     = strcontains(lower(each.value.role_definition_id_or_name), lower(local.role_definition_resource_substring)) ? each.value.role_definition_id_or_name : null
   role_definition_name                   = strcontains(lower(each.value.role_definition_id_or_name), lower(local.role_definition_resource_substring)) ? null : each.value.role_definition_id_or_name
   skip_service_principal_aad_check       = each.value.skip_service_principal_aad_check
+}
+
+# NSG Security Rules for Domain Services
+locals {
+  # Create a flattened map of all NSG rules that need to be created
+  nsg_security_rules = merge([
+    for nsg_key, nsg_config in var.nsg_rules : {
+      for rule_type in local.rule_types :
+      "${nsg_key}-${rule_type}" => {
+        rule_name       = try(nsg_config["${rule_type}_rule_name"], null)
+        nsg_key         = nsg_key
+        nsg_resource_id = nsg_config.nsg_resource_id
+        rule_type       = rule_type
+        allow_access    = lookup(nsg_config, "allow_${rule_type}_access", false)
+        rule_priority   = lookup(nsg_config, "${rule_type}_rule_priority", null)
+      }
+      if lookup(nsg_config, "allow_${rule_type}_access", false) == true
+    }
+  ]...)
+  # Rule configurations for each protocol
+  rule_configs = {
+    rd = {
+      default_name               = "EntraDomainServicesAllowRD"
+      description                = "Allow Entra Domain Services RD from Corporate Network Secure Access Workstation"
+      protocol                   = "Tcp"
+      source_port_range          = "*"
+      destination_port_ranges    = ["3389"]
+      source_address_prefix      = "CorpNetSaw"
+      destination_address_prefix = "*"
+      access                     = "Allow"
+      direction                  = "Inbound"
+    }
+    PSRemoting = {
+      default_name               = "EntraDomainServicesAllowPSRemoting"
+      description                = "Allow Entra Domain Services PSRemoting from Azure Active Directory Domain Services"
+      protocol                   = "Tcp"
+      source_port_range          = "*"
+      destination_port_ranges    = ["5986"]
+      source_address_prefix      = "AzureActiveDirectoryDomainServices"
+      destination_address_prefix = "*"
+      access                     = "Allow"
+      direction                  = "Inbound"
+    }
+    ldaps_private = {
+      default_name               = "EntraDomainServicesAllowLDAPSPrivate"
+      description                = "Allow Entra Domain Services LDAPS from Virtual Network"
+      protocol                   = "Tcp"
+      source_port_range          = "*"
+      destination_port_ranges    = ["636"]
+      source_address_prefix      = "VirtualNetwork"
+      destination_address_prefix = "*"
+      access                     = "Allow"
+      direction                  = "Inbound"
+    }
+    ldaps_public = {
+      default_name               = "EntraDomainServicesAllowLDAPSPublic"
+      description                = "Allow Entra Domain Services LDAPS from Internet"
+      protocol                   = "Tcp"
+      source_port_range          = "*"
+      destination_port_ranges    = ["636"]
+      source_address_prefix      = "*"
+      destination_address_prefix = "*"
+      access                     = "Allow"
+      direction                  = "Inbound"
+    }
+  }
+  rule_types = ["rd", "PSRemoting", "ldaps_private", "ldaps_public"]
+}
+
+resource "azurerm_network_security_rule" "this" {
+  for_each = local.nsg_security_rules
+
+  access                      = local.rule_configs[each.value.rule_type].access
+  direction                   = local.rule_configs[each.value.rule_type].direction
+  name                        = coalesce(each.value.rule_name, "${local.rule_configs[each.value.rule_type].default_name}-${each.value.nsg_key}")
+  network_security_group_name = provider::azapi::parse_resource_id(local.nsg_resource_type, each.value.nsg_resource_id)["name"]
+  priority                    = each.value.rule_priority
+  protocol                    = local.rule_configs[each.value.rule_type].protocol
+  resource_group_name         = provider::azapi::parse_resource_id(local.nsg_resource_type, each.value.nsg_resource_id)["resource_group_name"]
+  description                 = local.rule_configs[each.value.rule_type].description
+  destination_address_prefix  = local.rule_configs[each.value.rule_type].destination_address_prefix
+  destination_port_ranges     = local.rule_configs[each.value.rule_type].destination_port_ranges
+  source_address_prefix       = local.rule_configs[each.value.rule_type].source_address_prefix
+  source_port_range           = local.rule_configs[each.value.rule_type].source_port_range
 }

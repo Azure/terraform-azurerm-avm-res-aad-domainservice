@@ -72,7 +72,7 @@ A map describing customer-managed keys to associate with the resource. This incl
 - `key_version` - (Optional) The version of the key. If not specified, the latest version is used.
 - `user_assigned_identity` - (Optional) An object representing a user-assigned identity with the following properties:
   - `resource_id` - The resource ID of the user-assigned identity.
-DESCRIPTION  
+DESCRIPTION
 }
 
 # tflint-ignore: terraform_unused_declarations
@@ -103,7 +103,7 @@ A map of diagnostic settings to create on the Key Vault. The map key is delibera
 - `event_hub_authorization_rule_resource_id` - (Optional) The resource ID of the event hub authorization rule to send logs and metrics to.
 - `event_hub_name` - (Optional) The name of the event hub. If none is specified, the default event hub will be selected.
 - `marketplace_partner_resource_id` - (Optional) The full ARM resource ID of the Marketplace resource to which you would like to send Diagnostic LogsLogs.
-DESCRIPTION  
+DESCRIPTION
   nullable    = false
 
   validation {
@@ -195,14 +195,27 @@ DESCRIPTION
 
 variable "nsg_rules" {
   type = map(object({
-    nsg_resource_id     = optional(string)
-    allow_rdp_access    = optional(bool, false)
-    rdp_rule_priority   = optional(number)
-    winrm_rule_priority = optional(number)
+    nsg_resource_id = optional(string)
+
+    allow_rd_access  = optional(bool, false)
+    rd_rule_priority = optional(number)
+    rd_rule_name     = optional(string, "")
+
+    allow_PSRemoting_access  = optional(bool, false)
+    PSRemoting_rule_priority = optional(number)
+    PSRemoting_rule_name     = optional(string, "")
+
+    allow_ldaps_public_access  = optional(bool, false)
+    ldaps_public_rule_priority = optional(number)
+    ldaps_public_rule_name     = optional(string, "")
+
+    allow_ldaps_private_access  = optional(bool, false)
+    ldaps_private_rule_priority = optional(number)
+    ldaps_private_rule_name     = optional(string, "")
   }))
   default     = {}
   description = <<DESCRIPTION
-an object containing the priorities for the NSG rules to be created. The following properties can be specified: `rdp_rule_priority` and `winrm_rule_priority`.
+An object to help configure your NSG with basic functionality, specify the required protocols and set the priorities.
 DESCRIPTION
 }
 
@@ -213,7 +226,7 @@ variable "replica_sets" {
   }))
   default     = {}
   description = <<DESCRIPTION
-A map of replica sets to create for the Entra ID Domain Services instance. The map key is deliberately arbitrary to avoid issues where map keys maybe unknown at plan time.   
+A map of replica sets to create for the Entra ID Domain Services instance. The map key is deliberately arbitrary to avoid issues where map keys maybe unknown at plan time.
 DESCRIPTION
 }
 

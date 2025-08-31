@@ -43,8 +43,7 @@ The following resources are used by this module:
 - [azurerm_active_directory_domain_service_replica_set.replica](https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/resources/active_directory_domain_service_replica_set) (resource)
 - [azurerm_active_directory_domain_service_trust.this](https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/resources/active_directory_domain_service_trust) (resource)
 - [azurerm_management_lock.this](https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/resources/management_lock) (resource)
-- [azurerm_network_security_rule.rdp](https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/resources/network_security_rule) (resource)
-- [azurerm_network_security_rule.winrm](https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/resources/network_security_rule) (resource)
+- [azurerm_network_security_rule.this](https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/resources/network_security_rule) (resource)
 - [azurerm_role_assignment.this](https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/resources/role_assignment) (resource)
 - [modtm_telemetry.telemetry](https://registry.terraform.io/providers/azure/modtm/latest/docs/resources/telemetry) (resource)
 - [random_uuid.telemetry](https://registry.terraform.io/providers/hashicorp/random/latest/docs/resources/uuid) (resource)
@@ -248,16 +247,29 @@ Default: `null`
 
 ### <a name="input_nsg_rules"></a> [nsg\_rules](#input\_nsg\_rules)
 
-Description: an object containing the priorities for the NSG rules to be created. The following properties can be specified: `rdp_rule_priority` and `winrm_rule_priority`.
+Description: An object to help configure your NSG with basic functionality, specify the required protocols and set the priorities.
 
 Type:
 
 ```hcl
 map(object({
-    nsg_resource_id     = optional(string)
-    allow_rdp_access    = optional(bool, false)
-    rdp_rule_priority   = optional(number)
-    winrm_rule_priority = optional(number)
+    nsg_resource_id = optional(string)
+
+    allow_rd_access  = optional(bool, false)
+    rd_rule_priority = optional(number)
+    rd_rule_name     = optional(string, "")
+
+    allow_PSRemoting_access  = optional(bool, false)
+    PSRemoting_rule_priority = optional(number)
+    PSRemoting_rule_name     = optional(string, "")
+
+    allow_ldaps_public_access  = optional(bool, false)
+    ldaps_public_rule_priority = optional(number)
+    ldaps_public_rule_name     = optional(string, "")
+
+    allow_ldaps_private_access  = optional(bool, false)
+    ldaps_private_rule_priority = optional(number)
+    ldaps_private_rule_name     = optional(string, "")
   }))
 ```
 
@@ -265,7 +277,7 @@ Default: `{}`
 
 ### <a name="input_replica_sets"></a> [replica\_sets](#input\_replica\_sets)
 
-Description: A map of replica sets to create for the Entra ID Domain Services instance. The map key is deliberately arbitrary to avoid issues where map keys maybe unknown at plan time.   
+Description: A map of replica sets to create for the Entra ID Domain Services instance. The map key is deliberately arbitrary to avoid issues where map keys maybe unknown at plan time.
 
 Type:
 
