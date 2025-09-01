@@ -112,6 +112,13 @@ module "entra_domain_services" {
   }
 }
 
+resource "time_sleep" "wait_for_domain_services_deployment" {
+  depends_on = [
+    module.entra_domain_services
+  ]
+  create_duration  = "3m"
+  destroy_duration = "1s"
+}
 
 ########### Secondary Replica Networking Resources ###########
 
@@ -182,6 +189,7 @@ The following resources are used by this module:
 - [azurerm_virtual_network.secondary_vnet](https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/resources/virtual_network) (resource)
 - [azurerm_virtual_network_peering.peering_main_to_secondary](https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/resources/virtual_network_peering) (resource)
 - [azurerm_virtual_network_peering.peering_secondary_to_main](https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/resources/virtual_network_peering) (resource)
+- [time_sleep.wait_for_domain_services_deployment](https://registry.terraform.io/providers/hashicorp/time/latest/docs/resources/sleep) (resource)
 
 <!-- markdownlint-disable MD013 -->
 ## Required Inputs

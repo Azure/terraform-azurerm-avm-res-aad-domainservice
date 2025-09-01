@@ -105,6 +105,13 @@ module "entra_domain_services" {
   }
 }
 
+resource "time_sleep" "wait_for_domain_services_deployment" {
+  depends_on = [
+    module.entra_domain_services
+  ]
+  create_duration  = "3m"
+  destroy_duration = "1s"
+}
 
 ########### Secondary Replica Networking Resources ###########
 
