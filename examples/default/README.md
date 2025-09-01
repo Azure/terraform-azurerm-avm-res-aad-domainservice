@@ -13,11 +13,17 @@ terraform {
       source  = "hashicorp/azurerm"
       version = "~> 4.0"
     }
+    time = {
+      source = "hashicorp/time"
+      version = "0.13.1"
+    }
   }
 }
 
 provider "azurerm" {
   features {}
+}
+provider "time" {
 }
 
 locals {
@@ -174,6 +180,8 @@ The following requirements are needed by this module:
 
 - <a name="requirement_azurerm"></a> [azurerm](#requirement\_azurerm) (~> 4.0)
 
+- <a name="requirement_time"></a> [time](#requirement\_time) (0.13.1)
+
 ## Resources
 
 The following resources are used by this module:
@@ -189,7 +197,7 @@ The following resources are used by this module:
 - [azurerm_virtual_network.secondary_vnet](https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/resources/virtual_network) (resource)
 - [azurerm_virtual_network_peering.peering_main_to_secondary](https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/resources/virtual_network_peering) (resource)
 - [azurerm_virtual_network_peering.peering_secondary_to_main](https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/resources/virtual_network_peering) (resource)
-- [time_sleep.wait_for_domain_services_deployment](https://registry.terraform.io/providers/hashicorp/time/latest/docs/resources/sleep) (resource)
+- [time_sleep.wait_for_domain_services_deployment](https://registry.terraform.io/providers/hashicorp/time/0.13.1/docs/resources/sleep) (resource)
 
 <!-- markdownlint-disable MD013 -->
 ## Required Inputs
