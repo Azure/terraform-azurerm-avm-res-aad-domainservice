@@ -13,44 +13,50 @@ terraform {
       source  = "hashicorp/azurerm"
       version = "~> 4.0"
     }
-    time = {
-      source = "hashicorp/time"
-      version = "0.13.1"
-    }
   }
 }
 
 provider "azurerm" {
   features {}
 }
-provider "time" {
-}
 
 locals {
-  main_replica_location = "germanywestcentral"
+  managed_domain_location = "germanywestcentral"
+  managed_domain_RG_name  = "RG-MEDS"
+  managed_domain_name     = "meds.contoso.com"
+  managed_domain_vnet_name = "MEDS_vnet"
+  managed_domain_subnet_name = "MEDS_subnet"
+  managed_domain_vnet_cidr = ["10.0.0.0/16"]
+  managed_domain_subnet_cidr = ["10.0.0.0/24"]
+  managed_domain_nsg_name = "MEDS_nsg"
+
+  managed_domain_sku = "Enterprise" # Options: Standard, Enterprise
+  managed_domain_configuration_type = "FullySynced" # Options: FullySynced, ResourceForest
+  managed_domain_resuorce_name = "MEDS"
 }
 
+# Prepare dependant resources including RG and networking
 resource "azurerm_resource_group" "example" {
-  location = local.main_replica_location
-  name     = "RG-MEDS"
+  location = local.managed_domain_location
+  name     = local.managed_domain_RG_name
 }
 
 resource "azurerm_virtual_network" "example" {
   location            = azurerm_resource_group.example.location
-  name                = "MEDS-network"
+  name                = local.managed_domain_vnet_name
   resource_group_name = azurerm_resource_group.example.name
-  address_space       = ["10.0.0.0/16"]
+  address_space       = local.managed_domain_vnet_cidr
 }
 
 resource "azurerm_network_security_group" "example" {
   location            = azurerm_resource_group.example.location
-  name                = "MEDS-nsg"
+  name                = local.managed_domain_nsg_name
   resource_group_name = azurerm_resource_group.example.name
 }
 
 resource "azurerm_subnet" "example" {
-  address_prefixes     = ["10.0.0.0/24"]
-  name                 = "MEDS-subnet"
+  address_prefixes     = local.managed_domain_subnet_cidr
+  name                 = local.managed_domain_subnet_name
   resource_group_name  = azurerm_resource_group.example.name
   virtual_network_name = azurerm_virtual_network.example.name
 }
@@ -60,114 +66,36 @@ resource "azurerm_subnet_network_security_group_association" "example" {
   subnet_id                 = azurerm_subnet.example.id
 }
 
+# Module call to deploy the Entra Domain Services
 module "entra_domain_services" {
   source = "../../"
 
-  domain_configuration_type = "FullySynced"
-  domain_name               = "contoso.com"
+  domain_configuration_type = local.managed_domain_configuration_type
+  domain_name               = local.managed_domain_RG_name
   filtered_sync_enabled     = false
   location                  = azurerm_resource_group.example.location
-  name                      = "MEDS"
+  name                      = local.managed_domain_resuorce_name
   resource_group_name       = azurerm_resource_group.example.name
-  sku                       = "Enterprise"
+  sku                       = local.managed_domain_sku
   subnet_resource_id        = azurerm_subnet.example.id
 
   # Deploy required NSG rules
   nsg_rules = {
     r1 = {
       nsg_resource_id   = azurerm_network_security_group.example.id
+      
       allow_rd_access  = true
       rd_rule_priority = 2000
       rd_rule_name     = "CUSTOMRULENAME"
 
       allow_PSRemoting_access  = true
       PSRemoting_rule_priority = 2100
-
-      allow_ldaps_public_access = false
-      #ldaps_public_rule_priority = optional(number)
-
-      allow_ldaps_private_access = false
-      #ldaps_private_rule_priority = optional(number)
-    },
-    r2 = {
-      nsg_resource_id   = azurerm_network_security_group.secondary_nsg.id
-      allow_rd_access  = true
-      rd_rule_priority = 2000
-
-      allow_PSRemoting_access  = true
-      PSRemoting_rule_priority = 2100
-
-      allow_ldaps_public_access = false
-      #ldaps_public_rule_priority = optional(number)
-
-      allow_ldaps_private_access = false
-      #ldaps_private_rule_priority = optional(number)
-    }
-  }
-
-  # Deploy the secondary replica
-  replica_sets = {
-    secondary = {
-      subnet_id        = azurerm_subnet.secondary_subnet.id
-      replica_location = local.secondary_replica_location
     }
   }
 
   tags = {
     cost_center = "IT"
   }
-}
-
-resource "time_sleep" "wait_for_domain_services_deployment" {
-  depends_on = [
-    module.entra_domain_services
-  ]
-  create_duration  = "3m"
-  destroy_duration = "1s"
-}
-
-########### Secondary Replica Networking Resources ###########
-
-locals {
-  secondary_replica_location = "uksouth"
-}
-
-resource "azurerm_virtual_network" "secondary_vnet" {
-  location            = local.secondary_replica_location
-  name                = "secondary_MEDS_network"
-  resource_group_name = azurerm_resource_group.example.name
-  address_space       = ["192.168.0.0/16"]
-}
-resource "azurerm_subnet" "secondary_subnet" {
-  address_prefixes     = ["192.168.0.0/24"]
-  name                 = "MEDS_subnet_secondary"
-  resource_group_name  = azurerm_resource_group.example.name
-  virtual_network_name = azurerm_virtual_network.secondary_vnet.name
-}
-resource "azurerm_virtual_network_peering" "peering_main_to_secondary" {
-  name                      = "peering_main_to_secondary"
-  remote_virtual_network_id = azurerm_virtual_network.secondary_vnet.id
-  resource_group_name       = azurerm_resource_group.example.name
-  virtual_network_name      = azurerm_virtual_network.example.name
-}
-resource "azurerm_virtual_network_peering" "peering_secondary_to_main" {
-  name                      = "peering_secondary_to_main"
-  remote_virtual_network_id = azurerm_virtual_network.example.id
-  resource_group_name       = azurerm_resource_group.example.name
-  virtual_network_name      = azurerm_virtual_network.secondary_vnet.name
-}
-
-resource "azurerm_network_security_group" "secondary_nsg" {
-  location            = local.secondary_replica_location
-  name                = "secondary_MEDS_nsg"
-  resource_group_name = azurerm_resource_group.example.name
-  tags = {
-    environment = "Production"
-  }
-}
-resource "azurerm_subnet_network_security_group_association" "secondary_nsg_association" {
-  network_security_group_id = azurerm_network_security_group.secondary_nsg.id
-  subnet_id                 = azurerm_subnet.secondary_subnet.id
 }
 ```
 
@@ -180,24 +108,15 @@ The following requirements are needed by this module:
 
 - <a name="requirement_azurerm"></a> [azurerm](#requirement\_azurerm) (~> 4.0)
 
-- <a name="requirement_time"></a> [time](#requirement\_time) (0.13.1)
-
 ## Resources
 
 The following resources are used by this module:
 
 - [azurerm_network_security_group.example](https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/resources/network_security_group) (resource)
-- [azurerm_network_security_group.secondary_nsg](https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/resources/network_security_group) (resource)
 - [azurerm_resource_group.example](https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/resources/resource_group) (resource)
 - [azurerm_subnet.example](https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/resources/subnet) (resource)
-- [azurerm_subnet.secondary_subnet](https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/resources/subnet) (resource)
 - [azurerm_subnet_network_security_group_association.example](https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/resources/subnet_network_security_group_association) (resource)
-- [azurerm_subnet_network_security_group_association.secondary_nsg_association](https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/resources/subnet_network_security_group_association) (resource)
 - [azurerm_virtual_network.example](https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/resources/virtual_network) (resource)
-- [azurerm_virtual_network.secondary_vnet](https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/resources/virtual_network) (resource)
-- [azurerm_virtual_network_peering.peering_main_to_secondary](https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/resources/virtual_network_peering) (resource)
-- [azurerm_virtual_network_peering.peering_secondary_to_main](https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/resources/virtual_network_peering) (resource)
-- [time_sleep.wait_for_domain_services_deployment](https://registry.terraform.io/providers/hashicorp/time/0.13.1/docs/resources/sleep) (resource)
 
 <!-- markdownlint-disable MD013 -->
 ## Required Inputs

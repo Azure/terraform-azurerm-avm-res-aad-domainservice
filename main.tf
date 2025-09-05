@@ -114,7 +114,7 @@ locals {
         nsg_resource_id = nsg_config.nsg_resource_id
         rule_type       = rule_type
         allow_access    = lookup(nsg_config, "allow_${rule_type}_access", false)
-        rule_priority   = lookup(nsg_config, "${rule_type}_rule_priority", null)
+        rule_priority   = lookup(nsg_config, "${rule_type}_rule_priority", 4096)
       }
       if lookup(nsg_config, "allow_${rule_type}_access", false) == true
     }
