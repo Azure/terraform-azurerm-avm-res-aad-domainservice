@@ -22,7 +22,7 @@ provider "azurerm" {
 
 locals {
   managed_domain_location = "germanywestcentral"
-  managed_domain_RG_name  = "RG-MEDS"
+  managed_domain_RG_name  = "RG_MEDS"
   managed_domain_name     = "meds.contoso.com"
   managed_domain_vnet_name = "MEDS_vnet"
   managed_domain_subnet_name = "MEDS_subnet"
@@ -71,7 +71,7 @@ module "entra_domain_services" {
   source = "../../"
 
   domain_configuration_type = local.managed_domain_configuration_type
-  domain_name               = local.managed_domain_RG_name
+  domain_name               = local.managed_domain_name
   filtered_sync_enabled     = false
   location                  = azurerm_resource_group.example.location
   name                      = local.managed_domain_resuorce_name
@@ -83,7 +83,7 @@ module "entra_domain_services" {
   nsg_rules = {
     r1 = {
       nsg_resource_id   = azurerm_network_security_group.example.id
-      
+
       allow_rd_access  = true
       rd_rule_priority = 2000
       rd_rule_name     = "CUSTOMRULENAME"
