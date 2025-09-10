@@ -1,13 +1,3 @@
-
-
-#TODO: consider adding NSG with rules for domain services
-# Create our own managed NSG + add applicable rules
-
-# Ensure the Microsoft.AAD resource provider is registered
-# resource "azurerm_resource_provider_registration" "aad" {
-#   name = "Microsoft.AAD"
-# }
-
 # Create the AAD Domain Service
 resource "azurerm_active_directory_domain_service" "this" {
   domain_name               = var.domain_name
@@ -121,7 +111,7 @@ locals {
   ]...)
   # Rule configurations for each protocol
   rule_configs = {
-    rd = {
+    in_rd = {
       default_name               = "EntraDomainServicesAllowRD"
       description                = "Allow Entra Domain Services RD from Corporate Network Secure Access Workstation"
       protocol                   = "Tcp"
@@ -132,7 +122,7 @@ locals {
       access                     = "Allow"
       direction                  = "Inbound"
     }
-    PSRemoting = {
+    in_PSRemoting = {
       default_name               = "EntraDomainServicesAllowPSRemoting"
       description                = "Allow Entra Domain Services PSRemoting from Azure Active Directory Domain Services"
       protocol                   = "Tcp"
@@ -142,31 +132,64 @@ locals {
       destination_address_prefix = "*"
       access                     = "Allow"
       direction                  = "Inbound"
-    }
-    ldaps_private = {
-      default_name               = "EntraDomainServicesAllowLDAPSPrivate"
-      description                = "Allow Entra Domain Services LDAPS from Virtual Network"
+    },
+    out_AzureActiveDirectoryDomainServices = {
+      default_name               = "EntraDomainServicesOutAADDS"
+      description                = "Allow Entra Domain Services outbound to Azure Active Directory Domain Services"
       protocol                   = "Tcp"
       source_port_range          = "*"
-      destination_port_ranges    = ["636"]
-      source_address_prefix      = "VirtualNetwork"
-      destination_address_prefix = "*"
-      access                     = "Allow"
-      direction                  = "Inbound"
-    }
-    ldaps_public = {
-      default_name               = "EntraDomainServicesAllowLDAPSPublic"
-      description                = "Allow Entra Domain Services LDAPS from Internet"
-      protocol                   = "Tcp"
-      source_port_range          = "*"
-      destination_port_ranges    = ["636"]
+      destination_port_ranges    = ["443"]
       source_address_prefix      = "*"
-      destination_address_prefix = "*"
+      destination_address_prefix = "AzureActiveDirectoryDomainServices"
       access                     = "Allow"
-      direction                  = "Inbound"
+      direction                  = "Outbound"
+    },
+    out_AzureMonitor = {
+      default_name               = "AzureMonitorOut"
+      description                = "Allow Entra Domain Services outbound to Azure Monitor"
+      protocol                   = "Tcp"
+      source_port_range          = "*"
+      destination_port_ranges    = ["443"]
+      source_address_prefix      = "*"
+      destination_address_prefix = "AzureMonitor"
+      access                     = "Allow"
+      direction                  = "Outbound"
+    },
+    out_storage = {
+      default_name               = "StorageOut"
+      description                = "Allow Entra Domain Services outbound to Storage"
+      protocol                   = "Tcp"
+      source_port_range          = "*"
+      destination_port_ranges    = ["443"]
+      source_address_prefix      = "*"
+      destination_address_prefix = "Storage"
+      access                     = "Allow"
+      direction                  = "Outbound"
+    },
+    out_AzureActiveDirectory = {
+      default_name               = "AzureActiveDirectoryOut"
+      description                = "Allow Entra Domain Services outbound to Azure Active Directory"
+      protocol                   = "Tcp"
+      source_port_range          = "*"
+      destination_port_ranges    = ["443"]
+      source_address_prefix      = "*"
+      destination_address_prefix = "AzureActiveDirectory"
+      access                     = "Allow"
+      direction                  = "Outbound"
+    },
+    out_GuestAndHybridManagement = {
+      default_name               = "GuestAndHybridManagementOut"
+      description                = "Allow Entra Domain Services outbound to Guest And Hybrid Management"
+      protocol                   = "Tcp"
+      source_port_range          = "*"
+      destination_port_ranges    = ["443"]
+      source_address_prefix      = "*"
+      destination_address_prefix = "GuestAndHybridManagement"
+      access                     = "Allow"
+      direction                  = "Outbound"
     }
   }
-  rule_types = ["rd", "PSRemoting", "ldaps_private", "ldaps_public"]
+  rule_types = ["in_rd", "in_PSRemoting", "out_AzureActiveDirectoryDomainServices", "out_AzureMonitor", "out_storage", "out_AzureActiveDirectory", "out_GuestAndHybridManagement"]
 }
 
 resource "azurerm_network_security_rule" "this" {

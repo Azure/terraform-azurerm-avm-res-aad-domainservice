@@ -30,7 +30,7 @@ However, there is some light at the end of the tunnel, we are working to add the
 ## Deployment Process
 
 1. **Entra dependencies**: Make sure you deploy the [required Entra resources](https://learn.microsoft.com/en-us/entra/identity/domain-services/powershell-create-instance#create-required-microsoft-entra-resources) before you deploy the managed domain.
-   
+
 2. **NSG Deployment**: The NSG stubs provided in the module are very basic to enable operation, it is recommended to analyze your exact connectivty needs and make sure only required resources can reach your managed domain.
 
 > **Note**:  The deployment will often take over an hour to complete, make sure your terraform timeouts are configured accordingly.
@@ -281,21 +281,33 @@ Type:
 map(object({
     nsg_resource_id = optional(string)
 
-    allow_rd_access  = optional(bool, false)
-    rd_rule_priority = optional(number)
-    rd_rule_name     = optional(string, "")
+    allow_in_rd_access  = optional(bool, false)
+    in_rd_rule_priority = optional(number)
+    in_rd_rule_name     = optional(string, "")
 
-    allow_PSRemoting_access  = optional(bool, false)
-    PSRemoting_rule_priority = optional(number)
-    PSRemoting_rule_name     = optional(string, "")
+    allow_in_PSRemoting_access  = optional(bool, false)
+    in_PSRemoting_rule_priority = optional(number)
+    in_PSRemoting_rule_name     = optional(string, "")
 
-    allow_ldaps_public_access  = optional(bool, false)
-    ldaps_public_rule_priority = optional(number)
-    ldaps_public_rule_name     = optional(string, "")
+    allow_out_AzureActiveDirectoryDomainServices_access  = optional(bool, false)
+    out_AzureActiveDirectoryDomainServices_rule_priority = optional(number)
+    out_AzureActiveDirectoryDomainServices_rule_name     = optional(string, "")
 
-    allow_ldaps_private_access  = optional(bool, false)
-    ldaps_private_rule_priority = optional(number)
-    ldaps_private_rule_name     = optional(string, "")
+    allow_out_AzureMonitor_access  = optional(bool, false)
+    out_AzureMonitor_rule_priority = optional(number)
+    out_AzureMonitor_rule_name     = optional(string, "")
+
+    allow_out_storage_access  = optional(bool, false)
+    out_storage_rule_priority = optional(number)
+    out_storage_rule_name     = optional(string, "")
+
+    allow_out_AzureActiveDirectory_access  = optional(bool, false)
+    out_AzureActiveDirectory_rule_priority = optional(number)
+    out_AzureActiveDirectory_rule_name     = optional(string, "")
+
+    allow_out_GuestAndHybridManagement_access  = optional(bool, false)
+    out_GuestAndHybridManagement_rule_priority = optional(number)
+    out_GuestAndHybridManagement_rule_name     = optional(string, "")
   }))
 ```
 

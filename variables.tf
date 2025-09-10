@@ -193,25 +193,38 @@ A map describing the notifications settings to use for the Entra ID Domain Servi
 DESCRIPTION
 }
 
+# nsg resource id to external variable
 variable "nsg_rules" {
   type = map(object({
     nsg_resource_id = optional(string)
 
-    allow_rd_access  = optional(bool, false)
-    rd_rule_priority = optional(number)
-    rd_rule_name     = optional(string, "")
+    allow_in_rd_access  = optional(bool, false)
+    in_rd_rule_priority = optional(number)
+    in_rd_rule_name     = optional(string, "")
 
-    allow_PSRemoting_access  = optional(bool, false)
-    PSRemoting_rule_priority = optional(number)
-    PSRemoting_rule_name     = optional(string, "")
+    allow_in_PSRemoting_access  = optional(bool, false)
+    in_PSRemoting_rule_priority = optional(number)
+    in_PSRemoting_rule_name     = optional(string, "")
 
-    allow_ldaps_public_access  = optional(bool, false)
-    ldaps_public_rule_priority = optional(number)
-    ldaps_public_rule_name     = optional(string, "")
+    allow_out_AzureActiveDirectoryDomainServices_access  = optional(bool, false)
+    out_AzureActiveDirectoryDomainServices_rule_priority = optional(number)
+    out_AzureActiveDirectoryDomainServices_rule_name     = optional(string, "")
 
-    allow_ldaps_private_access  = optional(bool, false)
-    ldaps_private_rule_priority = optional(number)
-    ldaps_private_rule_name     = optional(string, "")
+    allow_out_AzureMonitor_access  = optional(bool, false)
+    out_AzureMonitor_rule_priority = optional(number)
+    out_AzureMonitor_rule_name     = optional(string, "")
+
+    allow_out_storage_access  = optional(bool, false)
+    out_storage_rule_priority = optional(number)
+    out_storage_rule_name     = optional(string, "")
+
+    allow_out_AzureActiveDirectory_access  = optional(bool, false)
+    out_AzureActiveDirectory_rule_priority = optional(number)
+    out_AzureActiveDirectory_rule_name     = optional(string, "")
+
+    allow_out_GuestAndHybridManagement_access  = optional(bool, false)
+    out_GuestAndHybridManagement_rule_priority = optional(number)
+    out_GuestAndHybridManagement_rule_name     = optional(string, "")
   }))
   default     = {}
   description = <<DESCRIPTION
