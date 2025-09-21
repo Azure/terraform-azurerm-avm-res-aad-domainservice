@@ -1,95 +1,115 @@
 # Create the AAD Domain Service
-resource "azurerm_active_directory_domain_service" "this" {
-  domain_name               = var.domain_name
-  location                  = var.location
-  name                      = var.name
-  resource_group_name       = var.resource_group_name
-  sku                       = var.sku
-  domain_configuration_type = var.domain_configuration_type
-  filtered_sync_enabled     = var.filtered_sync_enabled
-  tags                      = var.tags
+resource "azapi_resource" "this" {
+  location  = var.location
+  name      = var.name
+  parent_id = "/subscriptions/${data.azapi_client_config.current.subscription_id}/resourceGroups/${var.resource_group_name}"
+  type      = "Microsoft.AAD/domainServices@2025-06-01"
+  body = {
+    properties = {
+      domainName              = var.domain_name
+      sku                     = var.sku
+      domainConfigurationType = var.domain_configuration_type
+      filteredSync            = var.filtered_sync_enabled ? "Enabled" : "Disabled"
 
-  initial_replica_set {
-    subnet_id = var.subnet_resource_id
-  }
-  dynamic "notifications" {
-    for_each = var.notifications != null ? var.notifications : {}
+      # Include primary replica set and additional replica sets
+      replicaSets = concat([{
+        subnetId = var.subnet_resource_id
+        location = var.location
+        }], [
+        for key, replica in var.replica_sets : {
+          subnetId = replica.subnet_id
+          location = replica.replica_location
+        }
+      ])
 
-    content {
-      notify_dc_admins     = var.notifications.notify_dc_admins
-      notify_global_admins = var.notifications.notify_global_admins
+      notificationSettings = var.notifications != null ? {
+        notifyDcAdmins     = var.notifications.notify_dc_admins ? "Enabled" : "Disabled"
+        notifyGlobalAdmins = var.notifications.notify_global_admins ? "Enabled" : "Disabled"
+        } : {
+        notifyDcAdmins     = "Enabled"
+        notifyGlobalAdmins = "Enabled"
+      }
+
+      ldapsSettings = var.secure_ldap != null ? {
+        ldaps                  = var.secure_ldap.enabled ? "Enabled" : "Disabled"
+        pfxCertificate         = var.secure_ldap.pfx_certificate
+        pfxCertificatePassword = var.secure_ldap.pfx_certificate_password
+      } : null
+
+      domainSecuritySettings = {
+        syncKerberosPasswords = "Enabled"
+        syncNtlmPasswords     = "Enabled"
+        syncOnPremPasswords   = "Enabled"
+      }
+
+      # Include domain trusts in resource forest settings
+      resourceForestSettings = length(var.domain_service_trust) > 0 ? {
+        resourceForest = var.domain_name
+        settings = [
+          for key, trust in var.domain_service_trust : {
+            friendlyName      = trust.name
+            trustedDomainFqdn = trust.trusted_domain_fqdn
+            trustPassword     = trust.password
+            remoteDnsIps      = join(",", trust.trusted_domain_dns_ips)
+            trustDirection    = "Outbound"
+          }
+        ]
+      } : null
     }
   }
-  notifications {
-    notify_dc_admins     = true
-    notify_global_admins = true
-  }
-  dynamic "secure_ldap" {
-    for_each = var.secure_ldap != null ? [1] : []
-
-    content {
-      enabled                  = var.secure_ldap.enabled
-      pfx_certificate          = var.secure_ldap.pfx_certificate
-      pfx_certificate_password = var.secure_ldap.pfx_certificate_password
-    }
-  }
-  security {
-    sync_kerberos_passwords = true
-    sync_ntlm_passwords     = true
-    sync_on_prem_passwords  = true
-  }
+  create_headers = var.enable_telemetry ? { "User-Agent" : local.avm_azapi_header } : null
+  delete_headers = var.enable_telemetry ? { "User-Agent" : local.avm_azapi_header } : null
+  read_headers   = var.enable_telemetry ? { "User-Agent" : local.avm_azapi_header } : null
+  tags           = var.tags
+  update_headers = var.enable_telemetry ? { "User-Agent" : local.avm_azapi_header } : null
 
   lifecycle {
-    ignore_changes = [domain_configuration_type, tags]
+    ignore_changes = [body.properties.domainConfigurationType, tags]
   }
 }
 
-# Create a replica set for the AAD Domain Service
-resource "azurerm_active_directory_domain_service_replica_set" "replica" {
-  for_each = var.replica_sets
-
-  domain_service_id = azurerm_active_directory_domain_service.this.id
-  location          = each.value.replica_location
-  subnet_id         = each.value.subnet_id
-
-  depends_on = [
-    azurerm_active_directory_domain_service.this
-  ]
-}
-
-# Create a trust for the AAD Domain Service
-resource "azurerm_active_directory_domain_service_trust" "this" {
-  for_each = var.domain_service_trust
-
-  domain_service_id      = resource.azurerm_active_directory_domain_service.this.id
-  name                   = each.value.name
-  password               = each.value.password
-  trusted_domain_dns_ips = each.value.trusted_domain_dns_ips
-  trusted_domain_fqdn    = each.value.trusted_domain_fqdn
-}
+# Data source to get current Azure client configuration
+data "azapi_client_config" "current" {}
 
 # required AVM resources interfaces
-resource "azurerm_management_lock" "this" {
+resource "azapi_resource" "lock" {
   count = var.lock != null ? 1 : 0
 
-  lock_level = var.lock.kind
-  name       = coalesce(var.lock.name, "lock-${var.lock.kind}")
-  scope      = azurerm_active_directory_domain_service.this.id
-  notes      = var.lock.kind == "CanNotDelete" ? "Cannot delete the resource or its child resources." : "Cannot delete or modify the resource or its child resources."
+  name      = coalesce(var.lock.name, "lock-${var.lock.kind}")
+  parent_id = azapi_resource.this.id
+  type      = "Microsoft.Authorization/locks@2020-05-01"
+  body = {
+    properties = {
+      level = var.lock.kind
+      notes = var.lock.kind == "CanNotDelete" ? "Cannot delete the resource or its child resources." : "Cannot delete or modify the resource or its child resources."
+    }
+  }
+  create_headers = var.enable_telemetry ? { "User-Agent" : local.avm_azapi_header } : null
+  delete_headers = var.enable_telemetry ? { "User-Agent" : local.avm_azapi_header } : null
+  read_headers   = var.enable_telemetry ? { "User-Agent" : local.avm_azapi_header } : null
+  update_headers = var.enable_telemetry ? { "User-Agent" : local.avm_azapi_header } : null
 }
 
-resource "azurerm_role_assignment" "this" {
+resource "azapi_resource" "role_assignment" {
   for_each = var.role_assignments
 
-  principal_id                           = each.value.principal_id
-  scope                                  = resource.azurerm_active_directory_domain_service.this.id
-  condition                              = each.value.condition
-  condition_version                      = each.value.condition_version
-  delegated_managed_identity_resource_id = each.value.delegated_managed_identity_resource_id
-  principal_type                         = each.value.principal_type
-  role_definition_id                     = strcontains(lower(each.value.role_definition_id_or_name), lower(local.role_definition_resource_substring)) ? each.value.role_definition_id_or_name : null
-  role_definition_name                   = strcontains(lower(each.value.role_definition_id_or_name), lower(local.role_definition_resource_substring)) ? null : each.value.role_definition_id_or_name
-  skip_service_principal_aad_check       = each.value.skip_service_principal_aad_check
+  name      = uuid()
+  parent_id = azapi_resource.this.id
+  type      = "Microsoft.Authorization/roleAssignments@2022-04-01"
+  body = {
+    properties = {
+      principalId                        = each.value.principal_id
+      roleDefinitionId                   = strcontains(lower(each.value.role_definition_id_or_name), lower(local.role_definition_resource_substring)) ? each.value.role_definition_id_or_name : "/subscriptions/${data.azapi_client_config.current.subscription_id}/providers/Microsoft.Authorization/roleDefinitions/${each.value.role_definition_id_or_name}"
+      condition                          = each.value.condition
+      conditionVersion                   = each.value.condition_version
+      delegatedManagedIdentityResourceId = each.value.delegated_managed_identity_resource_id
+      principalType                      = each.value.principal_type
+    }
+  }
+  create_headers = var.enable_telemetry ? { "User-Agent" : local.avm_azapi_header } : null
+  delete_headers = var.enable_telemetry ? { "User-Agent" : local.avm_azapi_header } : null
+  read_headers   = var.enable_telemetry ? { "User-Agent" : local.avm_azapi_header } : null
+  update_headers = var.enable_telemetry ? { "User-Agent" : local.avm_azapi_header } : null
 }
 
 # NSG Security Rules for Domain Services
@@ -192,19 +212,27 @@ locals {
   rule_types = ["in_rd", "in_PSRemoting", "out_AzureActiveDirectoryDomainServices", "out_AzureMonitor", "out_storage", "out_AzureActiveDirectory", "out_GuestAndHybridManagement"]
 }
 
-resource "azurerm_network_security_rule" "this" {
+resource "azapi_resource" "network_security_rule" {
   for_each = local.nsg_security_rules
 
-  access                      = local.rule_configs[each.value.rule_type].access
-  direction                   = local.rule_configs[each.value.rule_type].direction
-  name                        = coalesce(each.value.rule_name, "${local.rule_configs[each.value.rule_type].default_name}-${each.value.nsg_key}")
-  network_security_group_name = provider::azapi::parse_resource_id(local.nsg_resource_type, each.value.nsg_resource_id)["name"]
-  priority                    = each.value.rule_priority
-  protocol                    = local.rule_configs[each.value.rule_type].protocol
-  resource_group_name         = provider::azapi::parse_resource_id(local.nsg_resource_type, each.value.nsg_resource_id)["resource_group_name"]
-  description                 = local.rule_configs[each.value.rule_type].description
-  destination_address_prefix  = local.rule_configs[each.value.rule_type].destination_address_prefix
-  destination_port_ranges     = local.rule_configs[each.value.rule_type].destination_port_ranges
-  source_address_prefix       = local.rule_configs[each.value.rule_type].source_address_prefix
-  source_port_range           = local.rule_configs[each.value.rule_type].source_port_range
+  name      = coalesce(each.value.rule_name, "${local.rule_configs[each.value.rule_type].default_name}-${each.value.nsg_key}")
+  parent_id = each.value.nsg_resource_id
+  type      = "Microsoft.Network/networkSecurityGroups/securityRules@2023-11-01"
+  body = {
+    properties = {
+      access                   = local.rule_configs[each.value.rule_type].access
+      direction                = local.rule_configs[each.value.rule_type].direction
+      priority                 = each.value.rule_priority
+      protocol                 = local.rule_configs[each.value.rule_type].protocol
+      description              = local.rule_configs[each.value.rule_type].description
+      destinationAddressPrefix = local.rule_configs[each.value.rule_type].destination_address_prefix
+      destinationPortRanges    = local.rule_configs[each.value.rule_type].destination_port_ranges
+      sourceAddressPrefix      = local.rule_configs[each.value.rule_type].source_address_prefix
+      sourcePortRange          = local.rule_configs[each.value.rule_type].source_port_range
+    }
+  }
+  create_headers = var.enable_telemetry ? { "User-Agent" : local.avm_azapi_header } : null
+  delete_headers = var.enable_telemetry ? { "User-Agent" : local.avm_azapi_header } : null
+  read_headers   = var.enable_telemetry ? { "User-Agent" : local.avm_azapi_header } : null
+  update_headers = var.enable_telemetry ? { "User-Agent" : local.avm_azapi_header } : null
 }

@@ -2,15 +2,14 @@ terraform {
   required_version = ">= 1.9, < 2.0"
 
   required_providers {
-    azurerm = {
-      source  = "hashicorp/azurerm"
-      version = "~> 4.0"
+    azapi = {
+      source  = "azure/azapi"
+      version = "~> 2.4"
     }
   }
 }
 
-provider "azurerm" {
-  features {}
+provider "azapi" {
 }
 
 locals {
@@ -27,35 +26,50 @@ locals {
   managed_domain_vnet_name          = "MEDS_vnet"
 }
 
+# Get current Azure client configuration
+data "azapi_client_config" "current" {}
+
 # Prepare dependant resources including RG and networking
-resource "azurerm_resource_group" "example" {
-  location = local.managed_domain_location
-  name     = local.managed_domain_RG_name
+resource "azapi_resource" "example_rg" {
+  location  = local.managed_domain_location
+  name      = local.managed_domain_RG_name
+  parent_id = "/subscriptions/${data.azapi_client_config.current.subscription_id}"
+  type      = "Microsoft.Resources/resourceGroups@2024-03-01"
 }
 
-resource "azurerm_virtual_network" "example" {
-  location            = azurerm_resource_group.example.location
-  name                = local.managed_domain_vnet_name
-  resource_group_name = azurerm_resource_group.example.name
-  address_space       = local.managed_domain_vnet_cidr
+resource "azapi_resource" "example_vnet" {
+  location  = local.managed_domain_location
+  name      = local.managed_domain_vnet_name
+  parent_id = azapi_resource.example_rg.id
+  type      = "Microsoft.Network/virtualNetworks@2023-11-01"
+  body = {
+    properties = {
+      addressSpace = {
+        addressPrefixes = local.managed_domain_vnet_cidr
+      }
+    }
+  }
 }
 
-resource "azurerm_network_security_group" "example" {
-  location            = azurerm_resource_group.example.location
-  name                = local.managed_domain_nsg_name
-  resource_group_name = azurerm_resource_group.example.name
+resource "azapi_resource" "example_nsg" {
+  location  = local.managed_domain_location
+  name      = local.managed_domain_nsg_name
+  parent_id = azapi_resource.example_rg.id
+  type      = "Microsoft.Network/networkSecurityGroups@2023-11-01"
 }
 
-resource "azurerm_subnet" "example" {
-  address_prefixes     = local.managed_domain_subnet_cidr
-  name                 = local.managed_domain_subnet_name
-  resource_group_name  = azurerm_resource_group.example.name
-  virtual_network_name = azurerm_virtual_network.example.name
-}
-
-resource "azurerm_subnet_network_security_group_association" "example" {
-  network_security_group_id = azurerm_network_security_group.example.id
-  subnet_id                 = azurerm_subnet.example.id
+resource "azapi_resource" "example_subnet" {
+  name      = local.managed_domain_subnet_name
+  parent_id = azapi_resource.example_vnet.id
+  type      = "Microsoft.Network/virtualNetworks/subnets@2023-11-01"
+  body = {
+    properties = {
+      addressPrefixes = local.managed_domain_subnet_cidr
+      networkSecurityGroup = {
+        id = azapi_resource.example_nsg.id
+      }
+    }
+  }
 }
 
 # Module call to deploy the Entra Domain Services
@@ -65,15 +79,15 @@ module "entra_domain_services" {
   domain_configuration_type = local.managed_domain_configuration_type
   domain_name               = local.managed_domain_name
   filtered_sync_enabled     = false
-  location                  = azurerm_resource_group.example.location
+  location                  = local.managed_domain_location
   name                      = local.managed_domain_resuorce_name
-  resource_group_name       = azurerm_resource_group.example.name
+  resource_group_name       = local.managed_domain_RG_name
   sku                       = local.managed_domain_sku
-  subnet_resource_id        = azurerm_subnet.example.id
+  subnet_resource_id        = azapi_resource.example_subnet.id
   # Deploy required NSG rules
   nsg_rules = {
     r1 = {
-      nsg_resource_id = azurerm_network_security_group.example.id
+      nsg_resource_id = azapi_resource.example_nsg.id
 
       allow_in_rd_access  = true
       in_rd_rule_priority = 2000
