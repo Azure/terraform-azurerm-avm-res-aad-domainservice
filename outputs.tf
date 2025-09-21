@@ -1,6 +1,14 @@
-output "private_endpoints" {
-  description = <<DESCRIPTION
-  A map of the private endpoints created.
-  DESCRIPTION
-  value       = var.private_endpoints_manage_dns_zone_group ? azurerm_private_endpoint.this_managed_dns_zone_groups : azurerm_private_endpoint.this_unmanaged_dns_zone_groups
+output "name" {
+  description = "The Domain Services resource name"
+  value       = azapi_resource.this.name
+}
+
+output "resource" {
+  description = "This is the full output for the resource."
+  value       = azapi_resource.this
+}
+
+output "resource_id" {
+  description = "The ID of the Domain Services resource"
+  value       = azapi_resource.this.id
 }
