@@ -6,68 +6,122 @@ This deploys the module in its simplest form.
 
 ```hcl
 terraform {
-  required_version = "~> 1.5"
+  required_version = ">= 1.9, < 2.0"
 
   required_providers {
-    azurerm = {
-      source  = "hashicorp/azurerm"
-      version = "~> 3.74"
-    }
-    modtm = {
-      source  = "azure/modtm"
-      version = "~> 0.3"
-    }
-    random = {
-      source  = "hashicorp/random"
-      version = "~> 3.5"
+    azapi = {
+      source  = "azure/azapi"
+      version = "~> 2.4"
     }
   }
 }
 
-provider "azurerm" {
-  features {}
+provider "azapi" {
 }
 
-
-## Section to provide a random Azure region for the resource group
-# This allows us to randomize the region for the resource group.
-module "regions" {
-  source  = "Azure/avm-utl-regions/azurerm"
-  version = "~> 0.1"
+locals {
+  managed_domain_RG_name            = "RG_MEDS"
+  managed_domain_configuration_type = "FullySynced" # Options: FullySynced, ResourceForest
+  managed_domain_location           = "germanywestcentral"
+  managed_domain_name               = "meds.contoso.com"
+  managed_domain_nsg_name           = "MEDS_nsg"
+  managed_domain_resuorce_name      = "MEDS"
+  managed_domain_sku                = "Enterprise" # Options: Standard, Enterprise
+  managed_domain_subnet_cidr        = ["10.0.0.0/24"]
+  managed_domain_subnet_name        = "MEDS_subnet"
+  managed_domain_vnet_cidr          = ["10.0.0.0/16"]
+  managed_domain_vnet_name          = "MEDS_vnet"
 }
 
-# This allows us to randomize the region for the resource group.
-resource "random_integer" "region_index" {
-  max = length(module.regions.regions) - 1
-  min = 0
-}
-## End of section to provide a random Azure region for the resource group
+# Get current Azure client configuration
+data "azapi_client_config" "current" {}
 
-# This ensures we have unique CAF compliant names for our resources.
-module "naming" {
-  source  = "Azure/naming/azurerm"
-  version = "~> 0.3"
+# Prepare dependant resources including RG and networking
+resource "azapi_resource" "example_rg" {
+  location  = local.managed_domain_location
+  name      = local.managed_domain_RG_name
+  parent_id = "/subscriptions/${data.azapi_client_config.current.subscription_id}"
+  type      = "Microsoft.Resources/resourceGroups@2024-03-01"
 }
 
-# This is required for resource modules
-resource "azurerm_resource_group" "this" {
-  location = module.regions.regions[random_integer.region_index.result].name
-  name     = module.naming.resource_group.name_unique
+resource "azapi_resource" "example_vnet" {
+  location  = local.managed_domain_location
+  name      = local.managed_domain_vnet_name
+  parent_id = azapi_resource.example_rg.id
+  type      = "Microsoft.Network/virtualNetworks@2023-11-01"
+  body = {
+    properties = {
+      addressSpace = {
+        addressPrefixes = local.managed_domain_vnet_cidr
+      }
+    }
+  }
 }
 
-# This is the module call
-# Do not specify location here due to the randomization above.
-# Leaving location as `null` will cause the module to use the resource group location
-# with a data source.
-module "test" {
+resource "azapi_resource" "example_nsg" {
+  location  = local.managed_domain_location
+  name      = local.managed_domain_nsg_name
+  parent_id = azapi_resource.example_rg.id
+  type      = "Microsoft.Network/networkSecurityGroups@2023-11-01"
+}
+
+resource "azapi_resource" "example_subnet" {
+  name      = local.managed_domain_subnet_name
+  parent_id = azapi_resource.example_vnet.id
+  type      = "Microsoft.Network/virtualNetworks/subnets@2023-11-01"
+  body = {
+    properties = {
+      addressPrefixes = local.managed_domain_subnet_cidr
+      networkSecurityGroup = {
+        id = azapi_resource.example_nsg.id
+      }
+    }
+  }
+}
+
+# Module call to deploy the Entra Domain Services
+module "entra_domain_services" {
   source = "../../"
 
-  # source             = "Azure/avm-<res/ptn>-<name>/azurerm"
-  # ...
-  location            = azurerm_resource_group.this.location
-  name                = "TODO" # TODO update with module.naming.<RESOURCE_TYPE>.name_unique
-  resource_group_name = azurerm_resource_group.this.name
-  enable_telemetry    = var.enable_telemetry # see variables.tf
+  domain_configuration_type = local.managed_domain_configuration_type
+  domain_name               = local.managed_domain_name
+  filtered_sync_enabled     = false
+  location                  = local.managed_domain_location
+  name                      = local.managed_domain_resuorce_name
+  resource_group_name       = local.managed_domain_RG_name
+  sku                       = local.managed_domain_sku
+  subnet_resource_id        = azapi_resource.example_subnet.id
+  # Deploy required NSG rules
+  nsg_rules = {
+    r1 = {
+      nsg_resource_id = azapi_resource.example_nsg.id
+
+      allow_in_rd_access  = true
+      in_rd_rule_priority = 2000
+      in_rd_rule_name     = "CUSTOMRULENAME"
+
+      allow_in_PSRemoting_access  = true
+      in_PSRemoting_rule_priority = 2100
+
+      allow_out_AzureActiveDirectoryDomainServices_access  = true
+      out_AzureActiveDirectoryDomainServices_rule_priority = 2200
+
+      allow_out_AzureMonitor_access  = true
+      out_AzureMonitor_rule_priority = 2300
+
+      allow_out_storage_access  = true
+      out_storage_rule_priority = 2400
+
+      allow_out_AzureActiveDirectory_access  = true
+      out_AzureActiveDirectory_rule_priority = 2500
+
+      allow_out_GuestAndHybridManagement_access  = true
+      out_GuestAndHybridManagement_rule_priority = 2600
+    }
+  }
+  tags = {
+    cost_center = "IT"
+  }
 }
 ```
 
@@ -76,20 +130,19 @@ module "test" {
 
 The following requirements are needed by this module:
 
-- <a name="requirement_terraform"></a> [terraform](#requirement\_terraform) (~> 1.5)
+- <a name="requirement_terraform"></a> [terraform](#requirement\_terraform) (>= 1.9, < 2.0)
 
-- <a name="requirement_azurerm"></a> [azurerm](#requirement\_azurerm) (~> 3.74)
-
-- <a name="requirement_modtm"></a> [modtm](#requirement\_modtm) (~> 0.3)
-
-- <a name="requirement_random"></a> [random](#requirement\_random) (~> 3.5)
+- <a name="requirement_azapi"></a> [azapi](#requirement\_azapi) (~> 2.4)
 
 ## Resources
 
 The following resources are used by this module:
 
-- [azurerm_resource_group.this](https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/resources/resource_group) (resource)
-- [random_integer.region_index](https://registry.terraform.io/providers/hashicorp/random/latest/docs/resources/integer) (resource)
+- [azapi_resource.example_nsg](https://registry.terraform.io/providers/azure/azapi/latest/docs/resources/resource) (resource)
+- [azapi_resource.example_rg](https://registry.terraform.io/providers/azure/azapi/latest/docs/resources/resource) (resource)
+- [azapi_resource.example_subnet](https://registry.terraform.io/providers/azure/azapi/latest/docs/resources/resource) (resource)
+- [azapi_resource.example_vnet](https://registry.terraform.io/providers/azure/azapi/latest/docs/resources/resource) (resource)
+- [azapi_client_config.current](https://registry.terraform.io/providers/azure/azapi/latest/docs/data-sources/client_config) (data source)
 
 <!-- markdownlint-disable MD013 -->
 ## Required Inputs
@@ -98,17 +151,7 @@ No required inputs.
 
 ## Optional Inputs
 
-The following input variables are optional (have default values):
-
-### <a name="input_enable_telemetry"></a> [enable\_telemetry](#input\_enable\_telemetry)
-
-Description: This variable controls whether or not telemetry is enabled for the module.  
-For more information see <https://aka.ms/avm/telemetryinfo>.  
-If it is set to false, then no telemetry will be collected.
-
-Type: `bool`
-
-Default: `true`
+No optional inputs.
 
 ## Outputs
 
@@ -118,19 +161,7 @@ No outputs.
 
 The following Modules are called:
 
-### <a name="module_naming"></a> [naming](#module\_naming)
-
-Source: Azure/naming/azurerm
-
-Version: ~> 0.3
-
-### <a name="module_regions"></a> [regions](#module\_regions)
-
-Source: Azure/avm-utl-regions/azurerm
-
-Version: ~> 0.1
-
-### <a name="module_test"></a> [test](#module\_test)
+### <a name="module_entra_domain_services"></a> [entra\_domain\_services](#module\_entra\_domain\_services)
 
 Source: ../../
 
