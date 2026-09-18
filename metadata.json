@@ -1,0 +1,8 @@
+{
+  "$schema": "https://raw.githubusercontent.com/Azure/azure-verified-modules-tools/main/src/Avm.Authoring/Resources/Schemas/v1/avm-module-metadata.schema.json",
+  "moduleDisplayName": "Azure Active Directory Domain Service",
+  "moduleDescription": "AVM Resource Module for Azure Active Directory Domain Service",
+  "canonicalType": "Microsoft.AAD/domainServices",
+  "owners": [],
+  "telemetryIdPrefix": "46d3xtrf.res.eb7a2d1"
+}
